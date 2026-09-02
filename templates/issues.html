@@ -1,0 +1,443 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}DataSentinel | Issues{% endblock %}
+
+{% block issues_active %}active{% endblock %}
+
+{% block extra_css %}
+
+<link rel="stylesheet" href="{% static 'css/issues.css' %}">
+{% endblock %}
+
+{% block content %}
+
+<header class="topbar">
+
+
+<div>
+    <h1>Issues</h1>
+    <p>Investigate and manage data quality issues.</p>
+</div>
+
+<div class="topbar-actions">
+    <button
+        type="button"
+        id="refreshIssues"
+        class="refresh-btn"
+    >
+        ↻ <span>Refresh</span>
+    </button>
+</div>
+
+
+</header>
+
+<section class="page-content">
+
+
+<div class="page-toolbar">
+
+    <div>
+        <h2>Data Quality Issues</h2>
+        <p>Issues detected during pipeline execution</p>
+    </div>
+
+    <div class="filter-group">
+
+        <select id="severityFilter">
+            <option value="">All Severities</option>
+            <option value="CRITICAL">Critical</option>
+            <option value="HIGH">High</option>
+            <option value="MEDIUM">Medium</option>
+            <option value="LOW">Low</option>
+        </select>
+
+        <select id="statusFilter">
+            <option value="">All Statuses</option>
+            <option value="OPEN">Open</option>
+            <option value="IN_PROGRESS">In Progress</option>
+            <option value="RESOLVED">Resolved</option>
+        </select>
+
+    </div>
+
+</div>
+
+<div
+    id="issuesLoading"
+    class="loading-state"
+>
+    Loading issues...
+</div>
+
+<div
+    id="issuesContainer"
+    class="issues-container hidden"
+></div>
+
+<div
+    id="issuesError"
+    class="error-state hidden"
+>
+
+    <div class="error-icon">!</div>
+
+    <h3>Unable to load issues</h3>
+
+    <p>
+        Something went wrong while loading issues.
+    </p>
+
+    <button
+        type="button"
+        id="retryIssuesButton"
+    >
+        Try Again
+    </button>
+
+</div>
+
+
+</section>
+
+<div
+    id="issueToast"
+    class="issue-toast hidden"
+>
+    <span class="issue-toast-icon">✓</span>
+    <span id="issueToastMessage"></span>
+</div>
+
+<div
+    id="issueDetailModal"
+    class="issue-detail-modal hidden"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="detailTitle"
+>
+
+
+<div
+    id="issueDetailOverlay"
+    class="issue-detail-overlay"
+></div>
+
+<div class="issue-detail-panel">
+
+    <header class="issue-detail-header">
+
+        <div class="issue-detail-heading">
+
+            <span class="issue-detail-label">
+                DATA QUALITY ISSUE
+            </span>
+
+            <h2 id="detailTitle">
+                Issue Details
+            </h2>
+
+        </div>
+
+        <button
+            type="button"
+            id="closeIssueDetail"
+            class="issue-detail-close"
+            aria-label="Close issue details"
+        >
+            ×
+        </button>
+
+    </header>
+
+    <div
+        id="issueDetailLoading"
+        class="issue-detail-loading"
+    >
+        Loading issue details...
+    </div>
+
+    <div
+        id="issueDetailError"
+        class="issue-detail-error hidden"
+    >
+
+        <div class="detail-error-icon">
+            !
+        </div>
+
+        <strong>
+            Unable to load issue details
+        </strong>
+
+        <span>
+            Please try again.
+        </span>
+
+    </div>
+
+    <div
+        id="issueDetailContent"
+        class="issue-detail-content hidden"
+    >
+
+        <div class="detail-status-row">
+
+            <div class="detail-status-item">
+
+                <span class="detail-label">
+                    Severity
+                </span>
+
+                <span
+                    id="detailSeverity"
+                    class="severity-badge"
+                ></span>
+
+            </div>
+
+            <div class="detail-status-item">
+
+                <span class="detail-label">
+                    Status
+                </span>
+
+                <span
+                    id="detailStatus"
+                    class="issue-status"
+                ></span>
+
+            </div>
+
+        </div>
+
+        <section class="detail-section detail-description-section">
+
+            <h3>
+                Issue Description
+            </h3>
+
+            <p id="detailDescription">
+                —
+            </p>
+
+        </section>
+
+        <section class="detail-section">
+
+            <h3>
+                Issue Information
+            </h3>
+
+            <div class="detail-grid">
+
+                <div class="detail-card">
+
+                    <span class="detail-label">
+                        Pipeline
+                    </span>
+
+                    <strong id="detailPipeline">
+                        —
+                    </strong>
+
+                </div>
+
+                <div class="detail-card">
+
+                    <span class="detail-label">
+                        Dataset
+                    </span>
+
+                    <strong id="detailDataset">
+                        —
+                    </strong>
+
+                </div>
+
+                <div class="detail-card">
+
+                    <span class="detail-label">
+                        Quality Check
+                    </span>
+
+                    <strong id="detailCheckName">
+                        —
+                    </strong>
+
+                </div>
+
+                <div class="detail-card">
+
+                    <span class="detail-label">
+                        Column
+                    </span>
+
+                    <strong id="detailColumn">
+                        —
+                    </strong>
+
+                </div>
+
+                <div class="detail-card">
+
+                    <span class="detail-label">
+                        Check Type
+                    </span>
+
+                    <strong id="detailCheckType">
+                        —
+                    </strong>
+
+                </div>
+
+                <div class="detail-card detail-card-score">
+
+                    <span class="detail-label">
+                        Quality Score
+                    </span>
+
+                    <strong id="detailQualityScore">
+                        —
+                    </strong>
+
+                </div>
+
+            </div>
+
+        </section>
+
+        <section class="detail-section">
+
+            <h3>
+                Quality Results
+            </h3>
+
+            <div class="detail-results-grid">
+
+                <div class="detail-result-card">
+
+                    <span class="detail-label">
+                        Rows Checked
+                    </span>
+
+                    <strong id="detailRowsChecked">
+                        —
+                    </strong>
+
+                </div>
+
+                <div class="detail-result-card">
+
+                    <span class="detail-label">
+                        Rows Passed
+                    </span>
+
+                    <strong id="detailRowsPassed">
+                        —
+                    </strong>
+
+                </div>
+
+                <div class="detail-result-card">
+
+                    <span class="detail-label">
+                        Rows Failed
+                    </span>
+
+                    <strong id="detailRowsFailed">
+                        —
+                    </strong>
+
+                </div>
+
+                <div class="detail-result-card">
+
+                    <span class="detail-label">
+                        Pass Rate
+                    </span>
+
+                    <strong id="detailPassRate">
+                        —
+                    </strong>
+
+                </div>
+
+            </div>
+
+        </section>
+
+        <section class="detail-section">
+
+            <h3>
+                AI Analysis
+            </h3>
+
+            <div class="detail-ai-box">
+
+                <p id="detailAIAnalysis">
+                    No AI analysis available.
+                </p>
+
+            </div>
+
+        </section>
+
+        <section class="detail-section">
+
+            <h3>
+                AI Recommendation
+            </h3>
+
+            <div class="detail-ai-box">
+
+                <p id="detailAIRecommendation">
+                    No AI recommendation available.
+                </p>
+
+            </div>
+
+        </section>
+
+        <section class="detail-section">
+
+            <h3>
+                Check Details
+            </h3>
+
+            <pre id="detailCheckDetails">No additional details available.</pre>
+
+        </section>
+
+        <div class="detail-meta">
+
+            <span>
+                Issue ID:
+                <strong id="detailIssueId">—</strong>
+            </span>
+
+            <span>
+                Pipeline Run:
+                <strong id="detailRunId">—</strong>
+            </span>
+
+            <span>
+                Created:
+                <strong id="detailCreatedAt">—</strong>
+            </span>
+
+        </div>
+
+    </div>
+
+</div>
+
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+
+<script src="{% static 'js/issues.js' %}"></script>
+
+{% endblock %}

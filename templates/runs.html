@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}DataSentinel | Runs{% endblock %}
+
+{% block runs_active %}active{% endblock %}
+
+{% block extra_css %}
+
+<link rel="stylesheet" href="{% static 'css/runs.css' %}">
+{% endblock %}
+
+{% block content %}
+
+<header class="topbar">
+    <div>
+        <h1>Pipeline Runs</h1>
+        <p>View and investigate pipeline execution history.</p>
+    </div>
+
+
+<div class="topbar-actions">
+    <button id="refreshRuns" class="refresh-btn" type="button">
+        ↻ <span>Refresh</span>
+    </button>
+</div>
+
+
+</header>
+
+<section class="page-content">
+
+
+<div class="page-toolbar">
+    <div>
+        <h2>Execution History</h2>
+        <p>Recent and historical pipeline runs</p>
+    </div>
+</div>
+
+<div id="runsLoading" class="loading-state">
+    Loading runs...
+</div>
+
+<div class="runs-table-wrapper">
+    <table class="runs-table">
+        <thead>
+            <tr>
+                <th>Run</th>
+                <th>Pipeline</th>
+                <th>Dataset</th>
+                <th>Status</th>
+                <th>Rows</th>
+                <th>Quality Score</th>
+                <th>Started</th>
+                <th>Completed</th>
+            </tr>
+        </thead>
+
+        <tbody id="runsTable"></tbody>
+    </table>
+</div>
+
+<div id="runsError" class="error-state hidden">
+
+    <div class="error-icon">!</div>
+
+    <h3>Unable to load runs</h3>
+
+    <p>
+        Something went wrong while loading pipeline runs.
+    </p>
+
+    <button id="retryRuns" class="secondary-btn" type="button">
+        Try Again
+    </button>
+
+</div>
+
+
+</section>
+
+{% endblock %}
+
+{% block extra_js %}
+
+<script src="{% static 'js/runs.js' %}"></script>
+
+{% endblock %}

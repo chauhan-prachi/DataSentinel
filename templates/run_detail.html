@@ -1,0 +1,303 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}DataSentinel | Run Detail{% endblock %}
+
+{% block runs_active %}active{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/run_detail.css' %}">
+{% endblock %}
+
+{% block content %}
+
+<header class="topbar">
+
+    <div>
+        <h1>Run #{{ run.id }}</h1>
+        <p>Pipeline execution details and quality results.</p>
+    </div>
+
+    <div class="topbar-actions">
+        <a href="{% url 'runs_page' %}" class="back-btn">
+            ← Back to Runs
+        </a>
+    </div>
+
+</header>
+
+{% if error %}
+
+<section class="page-content">
+
+    <div class="error-state">
+        <div class="error-icon">!</div>
+
+        <h3>{{ error }}</h3>
+
+        <p>The requested pipeline run could not be found.</p>
+
+        <a href="{% url 'runs_page' %}" class="back-btn">
+            Back to Runs
+        </a>
+    </div>
+
+</section>
+
+{% else %}
+
+<section class="page-content">
+
+    <div class="run-header">
+
+        <div>
+            <h2>{{ run.pipeline.name }}</h2>
+            <p>{{ run.pipeline.dataset.name }}</p>
+        </div>
+
+        <span class="run-status run-{{ run.status|lower }}">
+            {{ run.status }}
+        </span>
+
+    </div>
+
+    <div class="run-metrics">
+
+        <div class="metric-card">
+            <span>Rows Processed</span>
+            <strong>{{ run.rows_processed|default:0 }}</strong>
+        </div>
+
+        <div class="metric-card">
+            <span>Quality Score</span>
+
+            <strong>
+                {% if run.quality_score != None %}
+                    {{ run.quality_score|floatformat:2 }}%
+                {% else %}
+                    --
+                {% endif %}
+            </strong>
+        </div>
+
+        <div class="metric-card">
+            <span>Passed Checks</span>
+            <strong>{{ passed_checks }}</strong>
+        </div>
+
+        <div class="metric-card">
+            <span>Failed Checks</span>
+            <strong>{{ failed_checks }}</strong>
+        </div>
+
+    </div>
+
+    <section class="panel">
+
+        <div class="panel-header">
+
+            <div>
+                <h2>Run Information</h2>
+                <p>Execution metadata</p>
+            </div>
+
+        </div>
+
+        <div class="run-information">
+
+            <div>
+                <span>Run ID</span>
+                <strong>#{{ run.id }}</strong>
+            </div>
+
+            <div>
+                <span>Pipeline</span>
+                <strong>{{ run.pipeline.name }}</strong>
+            </div>
+
+            <div>
+                <span>Dataset</span>
+                <strong>{{ run.pipeline.dataset.name }}</strong>
+            </div>
+
+            <div>
+                <span>Started</span>
+                <strong>{{ run.started_at|date:"d M Y, h:i A" }}</strong>
+            </div>
+
+            <div>
+                <span>Completed</span>
+
+                <strong>
+                    {% if run.completed_at %}
+                        {{ run.completed_at|date:"d M Y, h:i A" }}
+                    {% else %}
+                        --
+                    {% endif %}
+                </strong>
+            </div>
+
+            <div>
+                <span>Status</span>
+                <strong>{{ run.status }}</strong>
+            </div>
+
+        </div>
+
+    </section>
+
+    {% if run.error_message %}
+
+    <section class="panel failure-panel">
+
+        <div class="panel-header">
+
+            <div>
+                <h2>Execution Error</h2>
+                <p>The pipeline encountered an error.</p>
+            </div>
+
+        </div>
+
+        <div class="error-message">
+            {{ run.error_message }}
+        </div>
+
+    </section>
+
+    {% endif %}
+
+    <section class="panel">
+
+        <div class="panel-header">
+
+            <div>
+                <h2>Quality Check Results</h2>
+                <p>Results generated during this pipeline execution.</p>
+            </div>
+
+        </div>
+
+        {% if results %}
+
+        <div class="checks-list">
+
+            {% for result in results %}
+
+            <div class="check-result">
+
+                <div class="check-result-header">
+
+                    <div>
+                        <h3>{{ result.quality_check.name }}</h3>
+
+                        <p>
+                            {{ result.quality_check.check_type }}
+
+                            {% if result.quality_check.column_name %}
+                                · {{ result.quality_check.column_name }}
+                            {% endif %}
+                        </p>
+                    </div>
+
+                    {% if result.passed %}
+
+                    <span class="result-badge passed">
+                        PASSED
+                    </span>
+
+                    {% else %}
+
+                    <span class="result-badge failed">
+                        FAILED
+                    </span>
+
+                    {% endif %}
+
+                </div>
+
+                <div class="check-stats">
+
+                    <div>
+                        <span>Rows Checked</span>
+                        <strong>{{ result.rows_checked }}</strong>
+                    </div>
+
+                    <div>
+                        <span>Rows Passed</span>
+                        <strong>{{ result.rows_passed }}</strong>
+                    </div>
+
+                    <div>
+                        <span>Rows Failed</span>
+                        <strong>{{ result.rows_failed }}</strong>
+                    </div>
+
+                    <div>
+                        <span>Pass Rate</span>
+                        <strong>{{ result.pass_rate|floatformat:2 }}%</strong>
+                    </div>
+
+                </div>
+
+                {% if result.details %}
+
+                <div class="check-details">
+                    <strong>Details</strong>
+                    <p>{{ result.details }}</p>
+                </div>
+
+                {% endif %}
+
+                {% if result.issues.all %}
+
+                <div class="issues-section">
+
+                    <h4>Issues</h4>
+
+                    {% for issue in result.issues.all %}
+
+                    <div class="issue-item">
+
+                        <div>
+                            <strong>{{ issue.title }}</strong>
+
+                            {% if issue.description %}
+                            <p>{{ issue.description }}</p>
+                            {% endif %}
+                        </div>
+
+                        <div class="issue-meta">
+                            <span>{{ issue.severity }}</span>
+                            <span>{{ issue.status }}</span>
+                        </div>
+
+                    </div>
+
+                    {% endfor %}
+
+                </div>
+
+                {% endif %}
+
+            </div>
+
+            {% endfor %}
+
+        </div>
+
+        {% else %}
+
+        <div class="empty-state">
+            No quality check results were recorded for this run.
+        </div>
+
+        {% endif %}
+
+    </section>
+
+</section>
+
+{% endif %}
+
+{% endblock %}

@@ -1,0 +1,219 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}DataSentinel | Pipeline Runs{% endblock %}
+
+{% block pipelines_active %}active{% endblock %}
+
+{% block extra_css %}
+<link
+    rel="stylesheet"
+    href="{% static 'css/pipeline_runs.css' %}"
+>
+{% endblock %}
+
+{% block content %}
+
+<header class="topbar">
+
+    <div>
+        <h1>Pipeline Runs</h1>
+
+        <p>
+            Monitor and review historical pipeline executions.
+        </p>
+    </div>
+
+    <div class="topbar-actions">
+
+        <button
+            id="refreshRuns"
+            class="refresh-btn"
+            type="button"
+        >
+            ↻ <span>Refresh</span>
+        </button>
+
+    </div>
+
+</header>
+
+
+<section class="page-content">
+
+    <div
+        id="runsLoading"
+        class="loading-state"
+    >
+        Loading pipeline runs...
+    </div>
+
+
+    <div
+        id="runsError"
+        class="error-state hidden"
+    >
+
+        <div class="error-icon">
+            !
+        </div>
+
+        <h3>
+            Unable to load pipeline runs
+        </h3>
+
+        <p id="runsErrorMessage">
+            Something went wrong.
+        </p>
+
+        <button
+            id="retryRuns"
+            class="secondary-btn"
+            type="button"
+        >
+            Try Again
+        </button>
+
+    </div>
+
+
+    <div
+        id="runsContent"
+        class="hidden"
+    >
+
+        <section class="stats-grid">
+
+            <div class="stat-card">
+
+                <span>
+                    Total Runs
+                </span>
+
+                <strong id="totalRuns">
+                    0
+                </strong>
+
+            </div>
+
+
+            <div class="stat-card">
+
+                <span>
+                    Successful
+                </span>
+
+                <strong id="successfulRuns">
+                    0
+                </strong>
+
+            </div>
+
+
+            <div class="stat-card">
+
+                <span>
+                    Failed
+                </span>
+
+                <strong id="failedRuns">
+                    0
+                </strong>
+
+            </div>
+
+
+            <div class="stat-card">
+
+                <span>
+                    Avg Quality
+                </span>
+
+                <strong id="averageQuality">
+                    0.00%
+                </strong>
+
+            </div>
+
+        </section>
+
+
+        <section class="content-card">
+
+            <div class="section-header">
+
+                <div>
+                    <h2>
+                        Pipeline Execution History
+                    </h2>
+
+                    <p>
+                        Review every pipeline execution and its quality results.
+                    </p>
+                </div>
+
+                <div class="run-count">
+                    <span id="runCount">
+                        0
+                    </span>
+                    runs
+                </div>
+
+            </div>
+
+
+            <div class="table-container">
+
+                <table class="runs-table">
+
+                    <thead>
+
+                        <tr>
+                            <th>Run ID</th>
+                            <th>Pipeline</th>
+                            <th>Dataset</th>
+                            <th>Status</th>
+                            <th>Rows</th>
+                            <th>Quality Score</th>
+                            <th>Started</th>
+                            <th>Action</th>
+                        </tr>
+
+                    </thead>
+
+
+                    <tbody id="runsTableBody">
+
+                        <tr>
+
+                            <td
+                                colspan="8"
+                                class="empty-state"
+                            >
+                                Loading runs...
+                            </td>
+
+                        </tr>
+
+                    </tbody>
+
+                </table>
+
+            </div>
+
+        </section>
+
+    </div>
+
+</section>
+
+{% endblock %}
+
+
+{% block extra_js %}
+
+<script
+    src="{% static 'js/pipeline_runs.js' %}"
+></script>
+
+{% endblock %}

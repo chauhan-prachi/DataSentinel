@@ -1,0 +1,178 @@
+{% extends "base.html" %}
+
+{% load static %}
+
+{% block title %}Settings | DataSentinel{% endblock %}
+
+{% block extra_css %}
+
+<link rel="stylesheet" href="{% static 'css/settings.css' %}">
+{% endblock %}
+
+{% block content %}
+
+<div class="settings-page">
+
+
+<div class="settings-topbar">
+    <div>
+        <h1>Settings</h1>
+        <p>Manage your DataSentinel account preferences.</p>
+    </div>
+</div>
+
+{% if messages %}
+    <div class="settings-messages">
+        {% for message in messages %}
+            <div class="settings-message">
+                <span class="settings-message-icon">✓</span>
+                <span>{{ message }}</span>
+            </div>
+        {% endfor %}
+    </div>
+{% endif %}
+
+<div class="settings-card">
+
+    <div class="settings-card-header">
+        <div>
+            <h2>Notifications</h2>
+            <p>Choose which DataSentinel alerts you want to receive.</p>
+        </div>
+    </div>
+
+    <form method="post" class="settings-form">
+
+        {% csrf_token %}
+
+        <input type="hidden" name="action" value="save_settings">
+
+        {% for field in settings_form %}
+            <div class="settings-option">
+
+                <div class="settings-option-content">
+
+                    <label for="{{ field.id_for_label }}">
+                        {{ field.label }}
+                    </label>
+
+                    {% if field.help_text %}
+                        <p>{{ field.help_text }}</p>
+                    {% endif %}
+
+                    {% for error in field.errors %}
+                        <span class="settings-field-error">
+                            {{ error }}
+                        </span>
+                    {% endfor %}
+
+                </div>
+
+                <label class="settings-switch">
+                    {{ field }}
+                    <span class="settings-slider"></span>
+                </label>
+
+            </div>
+
+            {% if not forloop.last %}
+                <div class="settings-divider"></div>
+            {% endif %}
+        {% endfor %}
+
+        {% if settings_form.non_field_errors %}
+            <div class="settings-error">
+                {{ settings_form.non_field_errors }}
+            </div>
+        {% endif %}
+
+        <div class="settings-actions">
+
+            <a href="{% url 'profile' %}" class="settings-cancel">
+                Cancel
+            </a>
+
+            <button type="submit" class="settings-save">
+                Save Settings
+            </button>
+
+        </div>
+
+    </form>
+
+</div>
+
+<div class="settings-card password-card">
+
+    <div class="settings-card-header">
+        <div>
+            <h2>Change Password</h2>
+            <p>Update your DataSentinel account password.</p>
+        </div>
+    </div>
+
+    <form method="post" class="password-form">
+
+        {% csrf_token %}
+
+        <input type="hidden" name="action" value="change_password">
+
+        {% if password_form.non_field_errors %}
+            <div class="settings-error">
+                {{ password_form.non_field_errors }}
+            </div>
+        {% endif %}
+
+        {% for field in password_form %}
+            <div class="settings-field">
+
+                <label for="{{ field.id_for_label }}">
+                    {{ field.label }}
+                </label>
+
+                {{ field }}
+
+                {% for error in field.errors %}
+                    <span class="settings-field-error">
+                        {{ error }}
+                    </span>
+                {% endfor %}
+
+            </div>
+        {% endfor %}
+
+        <div class="settings-actions">
+
+            <a href="{% url 'profile' %}" class="settings-cancel">
+                Cancel
+            </a>
+
+            <button type="submit" class="settings-save">
+                Change Password
+            </button>
+
+        </div>
+
+    </form>
+
+</div>
+
+<div class="settings-info-card">
+
+    <div class="settings-info-icon">
+        i
+    </div>
+
+    <div>
+        <h3>Your preferences are private</h3>
+        <p>
+            These settings apply only to your DataSentinel account.
+        </p>
+    </div>
+
+</div>
+
+
+</div>
+
+{% endblock %}

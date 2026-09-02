@@ -1,0 +1,641 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}DataSentinel | Datasets{% endblock %}
+
+{% block datasets_active %}active{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/datasets.css' %}">
+{% endblock %}
+
+{% block content %}
+
+<div class="datasets-page">
+
+    <header class="topbar">
+
+        <div class="topbar-content">
+
+            <div class="breadcrumb">
+                <span>DataSentinel</span>
+                <span class="breadcrumb-separator">/</span>
+                <span>Datasets</span>
+            </div>
+
+            <h1>Datasets</h1>
+
+            <p>
+                Manage and monitor the datasets connected to DataSentinel.
+            </p>
+
+        </div>
+
+        <div class="topbar-actions">
+
+            <button
+                type="button"
+                class="refresh-btn"
+                onclick="window.location.reload()"
+            >
+                <span class="refresh-icon">↻</span>
+                <span>Refresh</span>
+            </button>
+
+            <button
+                type="button"
+                class="primary-btn"
+                id="uploadDatasetButton"
+            >
+                <span>+</span>
+                <span>Add Dataset</span>
+            </button>
+
+        </div>
+
+    </header>
+
+
+    <section class="page-content">
+
+        {% if messages %}
+            <div class="messages-container">
+                {% for message in messages %}
+                    <div class="message message-{{ message.tags }}">
+                        <span>{{ message }}</span>
+                    </div>
+                {% endfor %}
+            </div>
+        {% endif %}
+
+
+        <div class="dataset-metrics">
+
+            <div class="metric-card">
+
+                <div class="metric-card-top">
+                    <span class="metric-label">
+                        Total Datasets
+                    </span>
+
+                    <span class="metric-icon">
+                        ▣
+                    </span>
+                </div>
+
+                <strong>
+                    {{ total_datasets }}
+                </strong>
+
+                <span class="metric-description">
+                    Connected data sources
+                </span>
+
+            </div>
+
+
+            <div class="metric-card">
+
+                <div class="metric-card-top">
+                    <span class="metric-label">
+                        Pipelines
+                    </span>
+
+                    <span class="metric-icon">
+                        ◇
+                    </span>
+                </div>
+
+                <strong>
+                    {{ total_pipelines }}
+                </strong>
+
+                <span class="metric-description">
+                    Using your datasets
+                </span>
+
+            </div>
+
+
+            <div class="metric-card">
+
+                <div class="metric-card-top">
+                    <span class="metric-label">
+                        Quality Checks
+                    </span>
+
+                    <span class="metric-icon">
+                        ✓
+                    </span>
+                </div>
+
+                <strong>
+                    {{ total_checks }}
+                </strong>
+
+                <span class="metric-description">
+                    Configured validations
+                </span>
+
+            </div>
+
+
+            <div class="metric-card">
+
+                <div class="metric-card-top">
+                    <span class="metric-label">
+                        Avg. Quality
+                    </span>
+
+                    <span class="metric-icon">
+                        ◔
+                    </span>
+                </div>
+
+                <strong>
+                    {% if average_quality is not None %}
+                        {{ average_quality }}%
+                    {% else %}
+                        --
+                    {% endif %}
+                </strong>
+
+                <span class="metric-description">
+                    Across recent runs
+                </span>
+
+            </div>
+
+        </div>
+
+
+        <div class="dataset-toolbar">
+
+            <div class="dataset-search">
+
+                <span class="search-icon">
+                    ⌕
+                </span>
+
+                <input
+                    type="search"
+                    id="datasetSearch"
+                    placeholder="Search datasets..."
+                    autocomplete="off"
+                >
+
+            </div>
+
+
+            <div class="dataset-filters">
+
+                <select id="datasetSourceFilter">
+
+                    <option value="all">
+                        All sources
+                    </option>
+
+                    <option value="csv">
+                        CSV
+                    </option>
+
+                    <option value="database">
+                        Database
+                    </option>
+
+                    <option value="url">
+                        URL
+                    </option>
+
+                </select>
+
+
+                <select id="datasetStatusFilter">
+
+                    <option value="all">
+                        All status
+                    </option>
+
+                    <option value="active">
+                        Active
+                    </option>
+
+                    <option value="inactive">
+                        Inactive
+                    </option>
+
+                </select>
+
+            </div>
+
+        </div>
+
+
+        <div class="section-heading">
+
+            <div>
+
+                <h2>
+                    Your Datasets
+                </h2>
+
+                <p>
+                    Data sources available to your pipelines.
+                </p>
+
+            </div>
+
+            <span class="dataset-count">
+                {{ total_datasets }}
+                {% if total_datasets == 1 %}
+                    dataset
+                {% else %}
+                    datasets
+                {% endif %}
+            </span>
+
+        </div>
+
+
+        {% if datasets %}
+
+            <div
+                id="datasetsContainer"
+                class="cards-grid"
+            >
+
+                {% for dataset in datasets %}
+
+                    <article
+                        class="dataset-card"
+                        data-name="{{ dataset.name|lower }}"
+                        data-source="{{ dataset.data_source.source_type|lower }}"
+                        data-status="{% if dataset.is_active %}active{% else %}inactive{% endif %}"
+                    >
+
+                        <div class="dataset-card-header">
+
+                            <div class="dataset-source">
+
+                                <div class="source-icon">
+                                    {% if dataset.data_source.source_type == "CSV" %}
+                                        CSV
+                                    {% elif dataset.data_source.source_type == "DATABASE" %}
+                                        DB
+                                    {% elif dataset.data_source.source_type == "URL" %}
+                                        URL
+                                    {% else %}
+                                        DS
+                                    {% endif %}
+                                </div>
+
+                                <div class="dataset-source-info">
+
+                                    <span class="source-label">
+                                        {{ dataset.data_source.source_type|default:"Unknown" }}
+                                    </span>
+
+                                    <span class="dataset-status {% if dataset.is_active %}active{% else %}inactive{% endif %}">
+                                        {% if dataset.is_active %}
+                                            Active
+                                        {% else %}
+                                            Inactive
+                                        {% endif %}
+                                    </span>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+
+                        <div class="dataset-card-body">
+
+                            <h3 class="dataset-name">
+                                {{ dataset.name }}
+                            </h3>
+
+                            <p class="dataset-description">
+                                {% if dataset.description %}
+                                    {{ dataset.description }}
+                                {% else %}
+                                    No description provided.
+                                {% endif %}
+                            </p>
+
+
+                            <div class="dataset-stats">
+
+                                <div class="dataset-stat">
+
+                                    <span class="stat-label">
+                                        Rows
+                                    </span>
+
+                                    <strong>
+                                        {{ dataset.row_count|default:0 }}
+                                    </strong>
+
+                                </div>
+
+
+                                <div class="dataset-stat">
+
+                                    <span class="stat-label">
+                                        Columns
+                                    </span>
+
+                                    <strong>
+                                        {{ dataset.column_count|default:0 }}
+                                    </strong>
+
+                                </div>
+
+
+                                <div class="dataset-stat">
+
+                                    <span class="stat-label">
+                                        Checks
+                                    </span>
+
+                                    <strong>
+                                        {{ dataset.quality_check_count|default:0 }}
+                                    </strong>
+
+                                </div>
+
+
+                                <div class="dataset-stat">
+
+                                    <span class="stat-label">
+                                        Pipelines
+                                    </span>
+
+                                    <strong>
+                                        {{ dataset.pipeline_count|default:0 }}
+                                    </strong>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+
+                        <div class="dataset-card-footer">
+
+                            <span class="dataset-updated">
+
+                                Updated
+                                {% if dataset.updated_at %}
+                                    {{ dataset.updated_at|date:"M d, Y" }}
+                                {% else %}
+                                    --
+                                {% endif %}
+
+                            </span>
+
+
+                            <a
+                                href="{% url 'dataset_detail_page' dataset.id %}"
+                                class="view-dataset-btn"
+                            >
+                                View Details
+                                <span>→</span>
+                            </a>
+
+                        </div>
+
+                    </article>
+
+                {% endfor %}
+
+            </div>
+
+
+            <div
+                id="datasetsEmpty"
+                class="empty-state"
+                style="display: none;"
+            >
+
+                <div class="empty-icon">
+                    ▣
+                </div>
+
+                <h3>
+                    No matching datasets
+                </h3>
+
+                <p>
+                    Try changing your search or filter.
+                </p>
+
+            </div>
+
+        {% else %}
+
+            <div class="empty-state">
+
+                <div class="empty-icon">
+                    ▣
+                </div>
+
+                <h3>
+                    No datasets yet
+                </h3>
+
+                <p>
+                    Connect your first dataset to start building
+                    data quality pipelines.
+                </p>
+
+                <button
+                    type="button"
+                    id="emptyUploadButton"
+                    class="primary-btn"
+                >
+                    <span>+</span>
+                    <span>Add Dataset</span>
+                </button>
+
+            </div>
+
+        {% endif %}
+
+    </section>
+
+
+    <div
+        id="datasetModal"
+        class="modal-overlay hidden"
+        aria-hidden="true"
+    >
+
+        <div
+            class="dataset-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="datasetModalTitle"
+        >
+
+            <div class="modal-header">
+
+                <div>
+
+                    <h2 id="datasetModalTitle">
+                        Add Dataset
+                    </h2>
+
+                    <p>
+                        Upload a CSV dataset to DataSentinel.
+                    </p>
+
+                </div>
+
+                <button
+                    type="button"
+                    id="closeDatasetForm"
+                    class="modal-close"
+                    aria-label="Close"
+                >
+                    ×
+                </button>
+
+            </div>
+
+
+            <form
+                method="POST"
+                enctype="multipart/form-data"
+                id="datasetForm"
+            >
+
+                {% csrf_token %}
+
+                <div class="modal-body">
+
+                    <div class="form-group">
+
+                        <label for="datasetName">
+                            Dataset name
+                        </label>
+
+                        <input
+                            type="text"
+                            id="datasetName"
+                            name="name"
+                            placeholder="e.g. Customer Dataset"
+                            required
+                        >
+
+                    </div>
+
+
+                    <div class="form-group">
+
+                        <label for="datasetDescription">
+
+                            Description
+
+                            <span class="optional">
+                                Optional
+                            </span>
+
+                        </label>
+
+                        <textarea
+                            id="datasetDescription"
+                            name="description"
+                            placeholder="Briefly describe this dataset..."
+                            rows="3"
+                        ></textarea>
+
+                    </div>
+
+
+                    <div class="form-group">
+
+                        <label for="datasetFile">
+                            CSV file
+                        </label>
+
+                        <label
+                            for="datasetFile"
+                            class="file-upload"
+                        >
+
+                            <span class="file-upload-icon">
+                                ↑
+                            </span>
+
+                            <span class="file-upload-content">
+
+                                <strong>
+                                    Choose CSV file
+                                </strong>
+
+                                <small>
+                                    CSV files up to your configured limit
+                                </small>
+
+                            </span>
+
+                            <span
+                                id="selectedFileName"
+                                class="selected-file"
+                            ></span>
+
+                        </label>
+
+                        <input
+                            type="file"
+                            id="datasetFile"
+                            name="file"
+                            accept=".csv,text/csv"
+                            required
+                            hidden
+                        >
+
+                    </div>
+
+                </div>
+
+
+                <div class="modal-footer">
+
+                    <button
+                        type="button"
+                        id="cancelDatasetButton"
+                        class="secondary-btn"
+                    >
+                        Cancel
+                    </button>
+
+                    <button
+                        type="submit"
+                        id="saveDatasetButton"
+                        class="primary-btn"
+                    >
+                        Upload Dataset
+                    </button>
+
+                </div>
+
+            </form>
+
+        </div>
+
+    </div>
+
+</div>
+
+{% endblock %}
+
+
+{% block extra_js %}
+
+<script src="{% static 'js/datasets.js' %}"></script>
+
+{% endblock %}

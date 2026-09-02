@@ -1,0 +1,939 @@
+{% extends "base.html" %}
+
+{% load static %}
+
+{% block title %}DataSentinel | {{ pipeline.name }}{% endblock %}
+
+{% block pipelines_active %}active{% endblock %}
+
+{% block extra_css %}
+
+<link rel="stylesheet" href="{% static 'css/pipeline_detail.css' %}">
+{% endblock %}
+
+{% block content %}
+
+<div class="pipeline-page">
+
+<header class="pipeline-header">
+
+    <div class="pipeline-header-left">
+
+        <a href="{% url 'pipelines_page' %}" class="back-link">
+            <span>←</span>
+            Pipelines
+        </a>
+
+        <div class="pipeline-title-row">
+
+            <div class="pipeline-title-content">
+
+                <div class="pipeline-title-line">
+
+                    <h1>{{ pipeline.name }}</h1>
+
+                    <span class="status-badge {{ pipeline.status|lower }}">
+                        <span class="status-dot"></span>
+                        {{ pipeline.status|upper }}
+                    </span>
+
+                </div>
+
+                <p>
+                    {% if pipeline.description %}
+                        {{ pipeline.description }}
+                    {% else %}
+                        No pipeline description available.
+                    {% endif %}
+                </p>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    <div class="pipeline-actions">
+
+        <a
+            href="{% url 'pipeline_detail_page' pipeline.id %}"
+            class="secondary-btn"
+        >
+            ↻ Refresh
+        </a>
+
+        <button
+            type="button"
+            class="primary-btn"
+            id="runPipelineButton"
+            data-pipeline-id="{{ pipeline.id }}"
+        >
+            ▶ Run Pipeline
+        </button>
+
+    </div>
+
+</header>
+
+
+<section class="stats-grid">
+
+    <div class="stat-card">
+
+        <div class="stat-icon dataset-icon">
+            ▣
+        </div>
+
+        <div class="stat-content">
+
+            <span class="stat-label">Dataset</span>
+
+            <strong class="stat-value stat-value-small">
+                {{ pipeline.dataset.name }}
+            </strong>
+
+        </div>
+
+    </div>
+
+
+    <div class="stat-card">
+
+        <div class="stat-icon runs-icon">
+            ↻
+        </div>
+
+        <div class="stat-content">
+
+            <span class="stat-label">Total Runs</span>
+
+            <strong class="stat-value">
+                {{ total_runs }}
+            </strong>
+
+        </div>
+
+    </div>
+
+
+    <div class="stat-card">
+
+        <div class="stat-icon quality-icon">
+            ◈
+        </div>
+
+        <div class="stat-content">
+
+            <span class="stat-label">Average Quality</span>
+
+            <strong class="stat-value">
+
+                {% if average_quality is not None %}
+                    {{ average_quality }}%
+                {% else %}
+                    —
+                {% endif %}
+
+            </strong>
+
+        </div>
+
+    </div>
+
+
+    <div class="stat-card">
+
+        <div class="stat-icon time-icon">
+            ◷
+        </div>
+
+        <div class="stat-content">
+
+            <span class="stat-label">Last Run</span>
+
+            <strong class="stat-value stat-value-small">
+
+                {% if latest_run %}
+                    {{ latest_run.started_at|date:"d M Y, H:i" }}
+                {% else %}
+                    Never
+                {% endif %}
+
+            </strong>
+
+        </div>
+
+    </div>
+
+</section>
+
+
+<section class="content-card">
+
+    <div class="section-header">
+
+        <div>
+
+            <span class="section-eyebrow">
+                CONFIGURATION
+            </span>
+
+            <h2>
+                Pipeline Configuration
+            </h2>
+
+            <p>
+                Dataset and pipeline information.
+            </p>
+
+        </div>
+
+    </div>
+
+
+    <div class="configuration-grid">
+
+        <div class="configuration-item">
+
+            <span>Pipeline</span>
+
+            <strong>
+                {{ pipeline.name }}
+            </strong>
+
+        </div>
+
+
+        <div class="configuration-item">
+
+            <span>Dataset</span>
+
+            <strong>
+                {{ pipeline.dataset.name }}
+            </strong>
+
+        </div>
+
+
+        <div class="configuration-item">
+
+            <span>Status</span>
+
+            <span class="status-badge {{ pipeline.status|lower }}">
+
+                <span class="status-dot"></span>
+
+                {{ pipeline.status|upper }}
+
+            </span>
+
+        </div>
+
+
+        <div class="configuration-item">
+
+            <span>Latest Checks</span>
+
+            <strong>
+                {{ latest_results|length }}
+            </strong>
+
+        </div>
+
+    </div>
+
+</section>
+
+
+{% if latest_run %}
+
+<section class="analysis-card">
+
+    <div class="analysis-header">
+
+        <div>
+
+            <span class="section-eyebrow">
+                LATEST EXECUTION
+            </span>
+
+            <h2>
+                Latest Quality Analysis
+            </h2>
+
+            <p>
+                Results from Run #{{ latest_run.id }}.
+            </p>
+
+        </div>
+
+        <span class="status-badge {{ latest_run.status|lower }}">
+
+            <span class="status-dot"></span>
+
+            {{ latest_run.status|upper }}
+
+        </span>
+
+    </div>
+
+
+    <div class="analysis-content">
+
+        <div class="quality-score-section">
+
+            <div
+                class="score-circle {% if latest_run.quality_score >= 80 %}score-good{% elif latest_run.quality_score >= 60 %}score-warning{% else %}score-danger{% endif %}"
+            >
+
+                <div class="score-circle-inner">
+
+                    <strong>
+
+                        {% if latest_run.quality_score is not None %}
+                            {{ latest_run.quality_score|floatformat:2 }}%
+                        {% else %}
+                            —
+                        {% endif %}
+
+                    </strong>
+
+                    <span>
+                        Quality
+                    </span>
+
+                </div>
+
+            </div>
+
+
+            <div class="score-description">
+
+                <strong>
+                    Overall Data Quality
+                </strong>
+
+                <span>
+                    Based on the latest pipeline execution.
+                </span>
+
+            </div>
+
+        </div>
+
+
+        <div class="analysis-metrics">
+
+            <div class="analysis-metric">
+
+                <span>
+                    Rows Processed
+                </span>
+
+                <strong>
+                    {{ latest_run.rows_processed|default:"0" }}
+                </strong>
+
+            </div>
+
+
+            <div class="analysis-metric success-metric">
+
+                <span>
+                    Passed Checks
+                </span>
+
+                <strong>
+                    {{ passed_checks }}
+                </strong>
+
+            </div>
+
+
+            <div class="analysis-metric danger-metric">
+
+                <span>
+                    Failed Checks
+                </span>
+
+                <strong>
+                    {{ failed_checks }}
+                </strong>
+
+            </div>
+
+
+            <div class="analysis-metric">
+
+                <span>
+                    Total Checks
+                </span>
+
+                <strong>
+                    {{ latest_results|length }}
+                </strong>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</section>
+
+{% endif %}
+
+
+<section class="content-card">
+
+    <div class="section-header">
+
+        <div>
+
+            <span class="section-eyebrow">
+                HISTORY
+            </span>
+
+            <h2>
+                Recent Runs
+            </h2>
+
+            <p>
+                Historical executions of this pipeline.
+            </p>
+
+        </div>
+
+        <span class="run-count">
+            {{ total_runs }} runs
+        </span>
+
+    </div>
+
+
+    {% if runs %}
+
+    <div class="runs-table-wrapper">
+
+        <table class="runs-table">
+
+            <thead>
+
+                <tr>
+
+                    <th>Run</th>
+                    <th>Status</th>
+                    <th>Rows</th>
+                    <th>Quality</th>
+                    <th>Started</th>
+                    <th>Completed</th>
+                    <th>Action</th>
+
+                </tr>
+
+            </thead>
+
+
+            <tbody>
+
+                {% for run in runs %}
+
+                <tr>
+
+                    <td>
+                        <strong class="run-id">
+                            #{{ run.id }}
+                        </strong>
+                    </td>
+
+
+                    <td>
+
+                        <span class="status-badge {{ run.status|lower }}">
+
+                            <span class="status-dot"></span>
+
+                            {{ run.status|upper }}
+
+                        </span>
+
+                    </td>
+
+
+                    <td>
+                        {{ run.rows_processed|default:"0" }}
+                    </td>
+
+
+                    <td>
+
+                        <strong class="table-quality">
+
+                            {% if run.quality_score is not None %}
+                                {{ run.quality_score|floatformat:2 }}%
+                            {% else %}
+                                —
+                            {% endif %}
+
+                        </strong>
+
+                    </td>
+
+
+                    <td>
+
+                        {% if run.started_at %}
+
+                        <span class="date-primary">
+                            {{ run.started_at|date:"d M Y" }}
+                        </span>
+
+                        <span class="date-secondary">
+                            {{ run.started_at|date:"H:i" }}
+                        </span>
+
+                        {% else %}
+
+                        <span class="muted">
+                            —
+                        </span>
+
+                        {% endif %}
+
+                    </td>
+
+
+                    <td>
+
+                        {% if run.completed_at %}
+
+                        <span class="date-primary">
+                            {{ run.completed_at|date:"d M Y" }}
+                        </span>
+
+                        <span class="date-secondary">
+                            {{ run.completed_at|date:"H:i" }}
+                        </span>
+
+                        {% else %}
+
+                        <span class="muted">
+                            —
+                        </span>
+
+                        {% endif %}
+
+                    </td>
+
+
+                    <td class="action-cell">
+
+                        <a
+                            href="{% url 'run_detail' run.id %}"
+                            class="view-run-btn"
+                        >
+                            View Details →
+                        </a>
+
+                    </td>
+
+                </tr>
+
+                {% endfor %}
+
+            </tbody>
+
+        </table>
+
+    </div>
+
+    {% else %}
+
+    <div class="empty-state">
+
+        <div class="empty-icon">
+            ↻
+        </div>
+
+        <h3>
+            No pipeline runs yet
+        </h3>
+
+        <p>
+            Run this pipeline to start quality analysis.
+        </p>
+
+    </div>
+
+    {% endif %}
+
+</section>
+
+
+<section class="content-card">
+
+    <div class="section-header">
+
+        <div>
+
+            <span class="section-eyebrow">
+                QUALITY
+            </span>
+
+            <h2>
+                Quality Checks
+            </h2>
+
+            <p>
+                Checks from the latest pipeline execution.
+            </p>
+
+        </div>
+
+        {% if latest_results %}
+
+        <span class="run-count">
+            {{ latest_results|length }} checks
+        </span>
+
+        {% endif %}
+
+    </div>
+
+
+    {% if latest_results %}
+
+    <div class="quality-checks-list">
+
+        {% for result in latest_results %}
+
+        <article
+            class="quality-check-card {% if result.passed %}check-passed{% else %}check-failed{% endif %}"
+        >
+
+            <div class="quality-check-main">
+
+                <div class="check-status-icon">
+
+                    {% if result.passed %}
+                        ✓
+                    {% else %}
+                        !
+                    {% endif %}
+
+                </div>
+
+
+                <div class="quality-check-info">
+
+                    <div class="quality-check-title">
+
+                        <h3>
+                            {{ result.quality_check.name }}
+                        </h3>
+
+                        {% if result.passed %}
+
+                        <span class="check-status passed">
+                            PASSED
+                        </span>
+
+                        {% else %}
+
+                        <span class="check-status failed">
+                            FAILED
+                        </span>
+
+                        {% endif %}
+
+                    </div>
+
+
+                    <div class="quality-check-subtitle">
+
+                        <span>
+                            {{ result.quality_check.check_type }}
+                        </span>
+
+                        {% if result.quality_check.column_name %}
+
+                        <span class="separator">
+                            ·
+                        </span>
+
+                        <span>
+                            {{ result.quality_check.column_name }}
+                        </span>
+
+                        {% endif %}
+
+                    </div>
+
+                </div>
+
+
+                <div class="pass-rate">
+
+                    <strong>
+                        {{ result.pass_rate|default:"0" }}%
+                    </strong>
+
+                    <span>
+                        Pass Rate
+                    </span>
+
+                </div>
+
+            </div>
+
+
+            <div class="check-progress">
+
+                <div class="check-progress-bar">
+
+                    <div
+                        class="check-progress-fill {% if result.passed %}progress-success{% else %}progress-danger{% endif %}"
+                        style="width: {{ result.pass_rate|default:0 }}%;"
+                    ></div>
+
+                </div>
+
+            </div>
+
+
+            <div class="check-metrics">
+
+                <div>
+
+                    <span>
+                        Rows Checked
+                    </span>
+
+                    <strong>
+                        {{ result.rows_checked|default:"0" }}
+                    </strong>
+
+                </div>
+
+
+                <div>
+
+                    <span>
+                        Rows Passed
+                    </span>
+
+                    <strong>
+                        {{ result.rows_passed|default:"0" }}
+                    </strong>
+
+                </div>
+
+
+                <div>
+
+                    <span>
+                        Rows Failed
+                    </span>
+
+                    <strong>
+                        {{ result.rows_failed|default:"0" }}
+                    </strong>
+
+                </div>
+
+            </div>
+
+
+            {% if result.details %}
+
+            <div class="check-details">
+
+                <span class="details-label">
+                    Details
+                </span>
+
+                <code>
+                    {{ result.details }}
+                </code>
+
+            </div>
+
+            {% endif %}
+
+
+            {% if result.issues.all %}
+
+            <div class="issues-container">
+
+                <div class="issues-heading">
+                    ⚠ Issues
+                </div>
+
+
+                {% for issue in result.issues.all %}
+
+                <div class="issue-item">
+
+                    <div class="issue-title">
+                        {{ issue.title }}
+                    </div>
+
+
+                    {% if issue.description %}
+
+                    <p>
+                        {{ issue.description }}
+                    </p>
+
+                    {% endif %}
+
+
+                    {% if issue.ai_recommendation %}
+
+                    <div class="recommendation">
+
+                        <strong>
+                            Recommendation
+                        </strong>
+
+                        <p>
+                            {{ issue.ai_recommendation }}
+                        </p>
+
+                    </div>
+
+                    {% endif %}
+
+                </div>
+
+                {% endfor %}
+
+            </div>
+
+            {% endif %}
+
+        </article>
+
+        {% endfor %}
+
+    </div>
+
+    {% else %}
+
+    <div class="empty-state">
+
+        <div class="empty-icon">
+            ✓
+        </div>
+
+        <h3>
+            No quality results yet
+        </h3>
+
+        <p>
+            Quality checks will appear here after the pipeline is executed.
+        </p>
+
+    </div>
+
+    {% endif %}
+
+</section>
+
+
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+
+    const button = document.getElementById("runPipelineButton");
+
+    if (!button) {
+        return;
+    }
+
+    button.addEventListener("click", function () {
+
+        const pipelineId = button.dataset.pipelineId;
+
+        button.disabled = true;
+        button.textContent = "Running...";
+
+        fetch("/api/pipelines/" + pipelineId + "/run/", {
+            method: "POST",
+            headers: {
+                "X-CSRFToken": getCookie("csrftoken"),
+                "Content-Type": "application/json"
+            }
+        })
+        .then(function (response) {
+
+            if (!response.ok) {
+
+                return response.text().then(function () {
+
+                    throw new Error(
+                        "Pipeline execution failed (" +
+                        response.status +
+                        ")."
+                    );
+
+                });
+
+            }
+
+            return response.json();
+
+        })
+        .then(function (data) {
+
+            if (!data || data.error) {
+
+                throw new Error(
+                    data && data.error
+                        ? data.error
+                        : "Pipeline execution failed."
+                );
+
+            }
+
+            window.location.reload();
+
+        })
+        .catch(function (error) {
+
+            alert(error.message);
+
+            button.disabled = false;
+            button.textContent = "▶ Run Pipeline";
+
+        });
+
+    });
+
+
+    function getCookie(name) {
+
+        const cookies = document.cookie.split(";");
+
+        for (let i = 0; i < cookies.length; i++) {
+
+            const cookie = cookies[i].trim();
+
+            if (cookie.indexOf(name + "=") === 0) {
+
+                return decodeURIComponent(
+                    cookie.substring(name.length + 1)
+                );
+
+            }
+
+        }
+
+        return null;
+    }
+
+});
+</script>
+
+{% endblock %}

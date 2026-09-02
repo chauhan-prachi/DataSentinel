@@ -1,0 +1,435 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}DataSentinel | Dashboard{% endblock %}
+
+{% block dashboard_active %}active{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
+{% endblock %}
+
+{% block content %}
+
+<header class="topbar">
+    <div>
+        <h1>Dashboard</h1>
+        <p>Monitor your data quality pipelines and issues.</p>
+    </div>
+
+    <div class="topbar-actions">
+        <button id="refreshButton" class="refresh-btn">
+            ↻ <span>Refresh</span>
+        </button>
+    </div>
+</header>
+
+<div id="loadingState" class="loading-state">
+    Loading dashboard...
+</div>
+
+<section id="dashboardContent" class="dashboard-content hidden">
+
+    <div class="metrics-grid">
+
+        <div class="metric-card">
+            <div class="metric-header">
+                <span>Total Runs</span>
+                <div class="metric-icon blue">↻</div>
+            </div>
+
+            <div class="metric-value" id="totalRuns">--</div>
+
+            <div class="metric-footer">
+                All pipeline executions
+            </div>
+        </div>
+
+        <div class="metric-card">
+            <div class="metric-header">
+                <span>Successful Runs</span>
+                <div class="metric-icon green">✓</div>
+            </div>
+
+            <div class="metric-value" id="successfulRuns">--</div>
+
+            <div class="metric-footer">
+                <span id="successRate">--</span> success rate
+            </div>
+        </div>
+
+        <div class="metric-card">
+            <div class="metric-header">
+                <span>Avg Quality Score</span>
+                <div class="metric-icon purple">★</div>
+            </div>
+
+            <div class="metric-value">
+                <span id="averageQuality">--</span>%
+            </div>
+
+            <div class="metric-footer">
+                Across all runs
+            </div>
+        </div>
+
+        <div class="metric-card">
+            <div class="metric-header">
+                <span>Open Issues</span>
+                <div class="metric-icon red">!</div>
+            </div>
+
+            <div class="metric-value" id="openIssues">--</div>
+
+            <div class="metric-footer">
+                Issues requiring attention
+            </div>
+        </div>
+
+    </div>
+
+    <div class="dashboard-grid">
+
+        <section class="panel latest-run-panel">
+
+            <div class="panel-header">
+                <div>
+                    <h2>Latest Pipeline Run</h2>
+                    <p>Most recently executed pipeline</p>
+                </div>
+
+                <span id="latestStatus" class="status-badge">--</span>
+            </div>
+
+            <div class="latest-run">
+
+                <div class="run-info">
+                    <span class="label">Pipeline</span>
+                    <strong id="latestPipeline">--</strong>
+                </div>
+
+                <div class="run-info">
+                    <span class="label">Dataset</span>
+                    <strong id="latestDataset">--</strong>
+                </div>
+
+                <div class="run-info">
+                    <span class="label">Rows Processed</span>
+                    <strong id="latestRows">--</strong>
+                </div>
+
+                <div class="run-info">
+                    <span class="label">Quality Score</span>
+                    <strong id="latestQuality">--%</strong>
+                </div>
+
+                <div class="run-info">
+                    <span class="label">Started</span>
+                    <strong id="latestStarted">--</strong>
+                </div>
+
+            </div>
+
+        </section>
+
+        <section class="panel quality-panel">
+
+            <div class="panel-header">
+                <div>
+                    <h2>Quality Overview</h2>
+                    <p>Check execution results</p>
+                </div>
+            </div>
+
+            <div class="quality-summary">
+
+                <div class="quality-circle">
+                    <div>
+                        <strong id="qualityPercentage">--</strong>
+                        <span>Quality</span>
+                    </div>
+                </div>
+
+                <div class="quality-stats">
+
+                    <div class="quality-stat">
+                        <span class="stat-dot passed"></span>
+
+                        <div>
+                            <strong id="passedChecks">--</strong>
+                            <span>Passed Checks</span>
+                        </div>
+                    </div>
+
+                    <div class="quality-stat">
+                        <span class="stat-dot failed"></span>
+
+                        <div>
+                            <strong id="failedChecks">--</strong>
+                            <span>Failed Checks</span>
+                        </div>
+                    </div>
+
+                    <div class="quality-stat">
+                        <span class="stat-dot issues"></span>
+
+                        <div>
+                            <strong id="qualityIssues">--</strong>
+                            <span>Open Issues</span>
+                        </div>
+                    </div>
+
+                </div>
+
+            </div>
+
+        </section>
+
+    </div>
+
+    <section class="analytics-grid">
+
+        <div class="panel chart-panel">
+
+            <div class="panel-header">
+                <div>
+                    <h2>Quality Score Trend</h2>
+                    <p>Quality performance across recent pipeline runs</p>
+                </div>
+
+                <span class="live-indicator">● Live</span>
+            </div>
+
+            <div class="chart-container">
+                <canvas id="qualityTrendChart"></canvas>
+            </div>
+
+        </div>
+
+        <div class="panel check-panel">
+
+            <div class="panel-header">
+                <div>
+                    <h2>Check Results</h2>
+                    <p>Passed vs failed quality checks</p>
+                </div>
+            </div>
+
+            <div class="check-chart-container">
+                <canvas id="checkResultsChart"></canvas>
+            </div>
+
+            <div class="check-summary">
+
+                <div class="check-summary-item">
+                    <span class="summary-dot passed"></span>
+
+                    <div>
+                        <strong id="analyticsPassedChecks">--</strong>
+                        <span>Passed</span>
+                    </div>
+                </div>
+
+                <div class="check-summary-item">
+                    <span class="summary-dot failed"></span>
+
+                    <div>
+                        <strong id="analyticsFailedChecks">--</strong>
+                        <span>Failed</span>
+                    </div>
+                </div>
+
+            </div>
+
+        </div>
+
+    </section>
+
+    <section class="analytics-grid secondary-analytics">
+
+        <div class="panel health-panel">
+
+            <div class="panel-header">
+                <div>
+                    <h2>Pipeline Health</h2>
+                    <p>Execution status across all runs</p>
+                </div>
+            </div>
+
+            <div class="health-content">
+
+                <div class="health-item">
+
+                    <div class="health-icon success">✓</div>
+
+                    <div class="health-info">
+                        <span>Successful</span>
+                        <strong id="healthSuccessful">--</strong>
+                    </div>
+
+                    <div class="health-bar">
+                        <span id="successHealthBar"></span>
+                    </div>
+
+                </div>
+
+                <div class="health-item">
+
+                    <div class="health-icon failed">!</div>
+
+                    <div class="health-info">
+                        <span>Failed</span>
+                        <strong id="healthFailed">--</strong>
+                    </div>
+
+                    <div class="health-bar">
+                        <span id="failedHealthBar"></span>
+                    </div>
+
+                </div>
+
+                <div class="health-item">
+
+                    <div class="health-icon total">↻</div>
+
+                    <div class="health-info">
+                        <span>Total Executions</span>
+                        <strong id="healthTotal">--</strong>
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+        <div class="panel issue-panel">
+
+            <div class="panel-header">
+
+                <div>
+                    <h2>Issue Overview</h2>
+                    <p>Current data quality issues</p>
+                </div>
+
+                <span class="issue-count" id="analyticsIssueCount">--</span>
+
+            </div>
+
+            <div class="issue-overview">
+
+                <div class="issue-main">
+
+                    <div class="issue-number" id="analyticsOpenIssues">
+                        --
+                    </div>
+
+                    <span>Open Issues</span>
+
+                </div>
+
+                <div class="issue-details">
+
+                    <div class="issue-row">
+                        <span class="issue-dot critical"></span>
+                        <span>Critical</span>
+                        <strong id="criticalIssues">0</strong>
+                    </div>
+
+                    <div class="issue-row">
+                        <span class="issue-dot high"></span>
+                        <span>High</span>
+                        <strong id="highIssues">0</strong>
+                    </div>
+
+                    <div class="issue-row">
+                        <span class="issue-dot medium"></span>
+                        <span>Medium</span>
+                        <strong id="mediumIssues">0</strong>
+                    </div>
+
+                    <div class="issue-row">
+                        <span class="issue-dot low"></span>
+                        <span>Low</span>
+                        <strong id="lowIssues">0</strong>
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </section>
+
+    <section class="panel recent-runs-panel">
+
+        <div class="panel-header">
+
+            <div>
+                <h2>Recent Pipeline Runs</h2>
+                <p>Latest pipeline execution history</p>
+            </div>
+
+            <a href="{% url 'runs_page' %}" class="view-all-btn">
+    View All
+</a>
+
+        </div>
+
+        <div class="table-wrapper">
+
+            <table>
+
+                <thead>
+                    <tr>
+                        <th>Run ID</th>
+                        <th>Pipeline</th>
+                        <th>Dataset</th>
+                        <th>Status</th>
+                        <th>Rows</th>
+                        <th>Quality Score</th>
+                        <th>Started</th>
+                    </tr>
+                </thead>
+
+                <tbody id="recentRunsTable">
+                    <tr>
+                        <td colspan="7" class="empty-state">
+                            Loading runs...
+                        </td>
+                    </tr>
+                </tbody>
+
+            </table>
+
+        </div>
+
+    </section>
+
+</section>
+
+<div id="errorState" class="error-state hidden">
+
+    <div class="error-icon">!</div>
+
+    <h3>Unable to load dashboard</h3>
+
+    <p id="errorMessage">
+        Something went wrong while connecting to the API.
+    </p>
+
+    <button onclick="loadDashboard()">
+        Try Again
+    </button>
+
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="{% static 'js/dashboard.js' %}"></script>
+
+{% endblock %}

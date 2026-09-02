@@ -1,0 +1,229 @@
+{% extends "base.html" %}
+
+{% load static %}
+
+{% block title %}Profile | DataSentinel{% endblock %}
+
+{% block extra_css %}
+
+<link rel="stylesheet" href="{% static 'css/profile.css' %}">
+{% endblock %}
+
+{% block profile_active %}active{% endblock %}
+
+{% block content %}
+
+<div class="profile-page">
+
+
+<div class="profile-topbar">
+    <div>
+        <h1>Profile</h1>
+        <p>Manage your DataSentinel account information.</p>
+    </div>
+</div>
+
+{% if messages %}
+    <div class="profile-messages">
+        {% for message in messages %}
+            <div class="profile-message">
+                <span class="message-icon">✓</span>
+                <span>{{ message }}</span>
+            </div>
+        {% endfor %}
+    </div>
+{% endif %}
+
+<div class="profile-layout">
+
+    <section class="profile-overview card">
+
+        <div class="profile-overview-header">
+            <div class="profile-avatar-large">
+                {% if request.user.first_name %}
+                    {{ request.user.first_name|slice:":1"|upper }}
+                {% else %}
+                    {{ request.user.username|slice:":1"|upper }}
+                {% endif %}
+            </div>
+
+            <div class="profile-overview-info">
+                <h2>
+                    {% if request.user.get_full_name %}
+                        {{ request.user.get_full_name }}
+                    {% else %}
+                        {{ request.user.username }}
+                    {% endif %}
+                </h2>
+
+                <p>{{ request.user.email }}</p>
+
+                <span class="profile-role">
+                    {% if request.user.is_staff %}
+                        Administrator
+                    {% else %}
+                        User
+                    {% endif %}
+                </span>
+            </div>
+        </div>
+
+        <div class="profile-overview-divider"></div>
+
+        <div class="profile-overview-item">
+            <span class="overview-label">Username</span>
+            <span class="overview-value">{{ request.user.username }}</span>
+        </div>
+
+        <div class="profile-overview-item">
+            <span class="overview-label">Email</span>
+            <span class="overview-value">{{ request.user.email }}</span>
+        </div>
+
+        <div class="profile-overview-item">
+            <span class="overview-label">Account Status</span>
+
+            <span class="account-status">
+                <span class="account-status-dot"></span>
+                Active
+            </span>
+        </div>
+
+    </section>
+
+    <section class="profile-card card">
+
+        <div class="section-heading">
+            <div>
+                <h2>Personal Information</h2>
+                <p>Update your name and email address.</p>
+            </div>
+        </div>
+
+        {% if form.non_field_errors %}
+            <div class="error-message">
+                {{ form.non_field_errors }}
+            </div>
+        {% endif %}
+
+        <form method="post" class="profile-form">
+
+            {% csrf_token %}
+
+            <div class="form-row">
+
+                <div class="form-group">
+                    <label for="{{ form.first_name.id_for_label }}">
+                        First Name
+                    </label>
+
+                    {{ form.first_name }}
+
+                    {% for error in form.first_name.errors %}
+                        <div class="field-error">
+                            {{ error }}
+                        </div>
+                    {% endfor %}
+                </div>
+
+                <div class="form-group">
+                    <label for="{{ form.last_name.id_for_label }}">
+                        Last Name
+                    </label>
+
+                    {{ form.last_name }}
+
+                    {% for error in form.last_name.errors %}
+                        <div class="field-error">
+                            {{ error }}
+                        </div>
+                    {% endfor %}
+                </div>
+
+            </div>
+
+            <div class="form-group">
+                <label for="{{ form.email.id_for_label }}">
+                    Email Address
+                </label>
+
+                {{ form.email }}
+
+                {% for error in form.email.errors %}
+                    <div class="field-error">
+                        {{ error }}
+                    </div>
+                {% endfor %}
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" class="save-button">
+                    Save Changes
+                </button>
+            </div>
+
+        </form>
+
+    </section>
+
+</div>
+
+<section class="account-section card">
+
+    <div class="section-heading">
+        <div>
+            <h2>Account</h2>
+            <p>Manage your DataSentinel account.</p>
+        </div>
+    </div>
+
+    <div class="account-actions">
+
+        <div class="account-action">
+
+            <div class="account-action-icon">
+                ⚙
+            </div>
+
+            <div class="account-action-content">
+                <h3>Settings</h3>
+                <p>Manage your account preferences and settings.</p>
+            </div>
+
+            <a href="{% url 'settings' %}" class="logout-button">
+                 Settings
+            </a>
+
+        </div>
+
+        <div class="account-divider"></div>
+
+        <div class="account-action logout-action">
+
+            <div class="account-action-icon">
+                ↪
+            </div>
+
+            <div class="account-action-content">
+                <h3>Logout</h3>
+                <p>Sign out from your DataSentinel account.</p>
+            </div>
+
+            <form method="post" action="{% url 'logout' %}">
+                {% csrf_token %}
+
+                <button type="submit" class="logout-button">
+                    Logout
+                </button>
+            </form>
+
+        </div>
+
+    </div>
+
+</section>
+
+
+</div>
+
+{% endblock %}

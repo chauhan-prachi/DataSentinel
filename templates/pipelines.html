@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}DataSentinel | Pipelines{% endblock %}
+
+{% block pipelines_active %}active{% endblock %}
+
+{% block extra_css %}
+
+<link rel="stylesheet" href="{% static 'css/pipelines.css' %}">
+{% endblock %}
+
+{% block content %}
+
+<header class="topbar">
+
+
+<div>
+    <h1>Pipelines</h1>
+    <p>Manage and execute your data quality pipelines.</p>
+</div>
+
+<div class="topbar-actions">
+    <button id="refreshPipelines" class="refresh-btn">
+        ↻ <span>Refresh</span>
+    </button>
+</div>
+
+
+</header>
+
+<section class="page-content">
+
+
+<div class="page-toolbar">
+
+    <div>
+        <h2>Quality Pipelines</h2>
+        <p>Configured DataSentinel pipelines</p>
+    </div>
+
+    <button id="createPipelineButton" class="primary-btn">
+        + Create Pipeline
+    </button>
+
+</div>
+
+<div id="pipelinesLoading" class="loading-state">
+    Loading pipelines...
+</div>
+
+<div id="pipelinesContainer" class="cards-grid hidden"></div>
+
+<div id="pipelinesError" class="error-state hidden">
+
+    <div class="error-icon">!</div>
+
+    <h3>Unable to load pipelines</h3>
+
+    <p>Something went wrong while loading pipelines.</p>
+
+    <button onclick="loadPipelines()">
+        Try Again
+    </button>
+
+</div>
+
+
+</section>
+
+{% endblock %}
+
+{% block extra_js %}
+
+<script src="{% static 'js/pipelines.js' %}"></script>
+
+{% endblock %}

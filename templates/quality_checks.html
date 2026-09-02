@@ -1,0 +1,293 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}DataSentinel | Quality Checks{% endblock %}
+
+{% block extra_css %}
+
+<link rel="stylesheet" href="{% static 'css/quality_checks.css' %}">
+{% endblock %}
+
+{% block content %}
+
+<header class="topbar">
+    <div>
+        <h1>Quality Checks</h1>
+        <p>Configure data quality rules for {{ dataset.name }}.</p>
+    </div>
+
+```
+<div class="topbar-actions">
+    <a
+        href="{% url 'datasets_page' %}"
+        class="secondary-btn"
+    >
+        Back to Datasets
+    </a>
+</div>
+```
+
+</header>
+
+<section class="page-content">
+
+```
+<div class="quality-page-header">
+    <div>
+        <h2>{{ dataset.name }}</h2>
+
+        <p>
+            {{ dataset.row_count }} rows ·
+            {{ dataset.column_count }} columns
+        </p>
+    </div>
+
+    <button
+        type="button"
+        id="showQualityCheckForm"
+        class="primary-btn"
+    >
+        + Add Quality Check
+    </button>
+</div>
+
+<div
+    id="qualityCheckFormContainer"
+    class="quality-form-card hidden"
+>
+
+    <div class="form-header">
+        <div>
+            <h2>Add Quality Check</h2>
+            <p>Define a rule that DataSentinel will execute.</p>
+        </div>
+
+        <button
+            type="button"
+            id="closeQualityCheckForm"
+            class="close-btn"
+        >
+            ×
+        </button>
+    </div>
+
+    <form
+        method="post"
+        action="{% url 'create_quality_check' dataset.id %}"
+    >
+
+        {% csrf_token %}
+
+        {% if form.non_field_errors %}
+            <div class="form-error">
+                {{ form.non_field_errors }}
+            </div>
+        {% endif %}
+
+        <div class="form-group">
+            <label for="{{ form.name.id_for_label }}">
+                Check Name
+            </label>
+
+            {{ form.name }}
+
+            {% if form.name.errors %}
+                <div class="field-error">
+                    {{ form.name.errors }}
+                </div>
+            {% endif %}
+        </div>
+
+        <div class="form-group">
+            <label for="{{ form.check_type.id_for_label }}">
+                Check Type
+            </label>
+
+            {{ form.check_type }}
+
+            {% if form.check_type.errors %}
+                <div class="field-error">
+                    {{ form.check_type.errors }}
+                </div>
+            {% endif %}
+        </div>
+
+        <div class="form-group">
+            <label for="{{ form.column_name.id_for_label }}">
+                Column
+            </label>
+
+            {{ form.column_name }}
+
+            <small>
+                Select a column or choose Dataset-level check.
+            </small>
+
+            {% if form.column_name.errors %}
+                <div class="field-error">
+                    {{ form.column_name.errors }}
+                </div>
+            {% endif %}
+        </div>
+
+        <div class="form-group">
+            <label for="{{ form.configuration.id_for_label }}">
+                Configuration
+            </label>
+
+            {{ form.configuration }}
+
+            <small>
+                For RANGE checks, use for example:
+                {"minimum": 18, "maximum": 100}
+            </small>
+
+            {% if form.configuration.errors %}
+                <div class="field-error">
+                    {{ form.configuration.errors }}
+                </div>
+            {% endif %}
+        </div>
+
+        <div class="form-checkbox-group">
+            {{ form.is_active }}
+
+            <label for="{{ form.is_active.id_for_label }}">
+                Active
+            </label>
+        </div>
+
+        <div class="form-actions">
+            <button
+                type="button"
+                id="cancelQualityCheck"
+                class="secondary-btn"
+            >
+                Cancel
+            </button>
+
+            <button
+                type="submit"
+                class="primary-btn"
+            >
+                Save Quality Check
+            </button>
+        </div>
+
+    </form>
+
+</div>
+
+<div class="quality-checks-section">
+
+    <div class="section-header">
+        <div>
+            <h2>Configured Checks</h2>
+
+            <p>
+                Quality rules currently configured for this dataset.
+            </p>
+        </div>
+    </div>
+
+    {% if quality_checks %}
+
+        <div class="quality-checks-list">
+
+            {% for check in quality_checks %}
+
+                <div class="quality-check-card">
+
+                    <div class="quality-check-icon">
+                        ✓
+                    </div>
+
+                    <div class="quality-check-info">
+
+                        <div class="quality-check-title">
+                            <h3>{{ check.name }}</h3>
+
+                            {% if check.is_active %}
+                                <span class="check-status active">
+                                    Active
+                                </span>
+                            {% else %}
+                                <span class="check-status inactive">
+                                    Inactive
+                                </span>
+                            {% endif %}
+                        </div>
+
+                        <div class="quality-check-meta">
+
+                            <span>
+                                {{ check.get_check_type_display }}
+                            </span>
+
+                            {% if check.column_name %}
+                                <span>
+                                    Column: {{ check.column_name }}
+                                </span>
+                            {% else %}
+                                <span>
+                                    Dataset-level
+                                </span>
+                            {% endif %}
+
+                        </div>
+
+                        {% if check.configuration %}
+
+                            <div class="quality-check-config">
+                                {{ check.configuration }}
+                            </div>
+
+                        {% endif %}
+
+                    </div>
+
+                </div>
+
+            {% endfor %}
+
+        </div>
+
+    {% else %}
+
+        <div class="empty-state">
+
+            <div class="empty-icon">
+                ✓
+            </div>
+
+            <h3>No quality checks configured</h3>
+
+            <p>
+                Add your first quality check to start monitoring
+                this dataset.
+            </p>
+
+            <button
+                type="button"
+                id="emptyAddQualityCheck"
+                class="primary-btn"
+            >
+                + Add Quality Check
+            </button>
+
+        </div>
+
+    {% endif %}
+
+</div>
+```
+
+</section>
+
+{% endblock %}
+
+{% block extra_js %}
+
+<script src="{% static 'js/quality_checks.js' %}"></script>
+
+{% endblock %}

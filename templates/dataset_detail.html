@@ -1,0 +1,603 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}DataSentinel | {{ dataset.name }}{% endblock %}
+
+{% block datasets_active %}active{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/dataset_detail.css' %}">
+{% endblock %}
+
+{% block content %}
+
+<div class="dataset-detail-page">
+
+    <header class="detail-header">
+
+        <div class="breadcrumb">
+            <a href="{% url 'datasets_page' %}">Datasets</a>
+            <span>/</span>
+            <span>{{ dataset.name }}</span>
+        </div>
+
+        <div class="header-main">
+
+            <div class="header-info">
+
+                <div class="dataset-icon">
+                    {% if dataset.data_source %}
+                        {% if dataset.data_source.source_type == "CSV" %}
+                            CSV
+                        {% elif dataset.data_source.source_type == "DATABASE" %}
+                            DB
+                        {% elif dataset.data_source.source_type == "URL" %}
+                            URL
+                        {% else %}
+                            DS
+                        {% endif %}
+                    {% else %}
+                        DS
+                    {% endif %}
+                </div>
+
+                <div class="header-text">
+
+                    <div class="title-row">
+
+                        <h1>{{ dataset.name }}</h1>
+
+                        <span class="status-badge {% if dataset.is_active %}active{% else %}inactive{% endif %}">
+                            <span class="status-dot"></span>
+                            {% if dataset.is_active %}
+                                Active
+                            {% else %}
+                                Inactive
+                            {% endif %}
+                        </span>
+
+                    </div>
+
+                    <div class="dataset-meta">
+
+                        {% if dataset.data_source %}
+                            <span>
+                                {{ dataset.data_source.source_type|default:"Unknown" }}
+                            </span>
+                        {% endif %}
+
+                        <span>Dataset #{{ dataset.id }}</span>
+
+                    </div>
+
+                    {% if dataset.description %}
+                        <p>{{ dataset.description }}</p>
+                    {% else %}
+                        <p class="muted">
+                            No description has been added for this dataset.
+                        </p>
+                    {% endif %}
+
+                </div>
+
+            </div>
+
+            <div class="header-actions">
+
+                <button
+                    type="button"
+                    class="secondary-btn"
+                    onclick="window.location.reload()"
+                >
+                    <span>↻</span>
+                    Refresh
+                </button>
+
+                <a
+                    href="{% url 'datasets_page' %}"
+                    class="secondary-btn"
+                >
+                    Back to Datasets
+                </a>
+
+            </div>
+
+        </div>
+
+    </header>
+
+
+    <main class="detail-content">
+
+
+        <section class="stats-grid">
+
+            <div class="stat-card">
+
+                <div class="stat-icon rows-icon">
+                    #
+                </div>
+
+                <div class="stat-content">
+                    <span>Rows</span>
+                    <strong>{{ dataset.row_count|default:"0" }}</strong>
+                    <small>Records</small>
+                </div>
+
+            </div>
+
+
+            <div class="stat-card">
+
+                <div class="stat-icon columns-icon">
+                    C
+                </div>
+
+                <div class="stat-content">
+                    <span>Columns</span>
+                    <strong>{{ dataset.column_count|default:"0" }}</strong>
+                    <small>Fields</small>
+                </div>
+
+            </div>
+
+
+            <div class="stat-card">
+
+                <div class="stat-icon checks-icon">
+                    ✓
+                </div>
+
+                <div class="stat-content">
+                    <span>Quality Checks</span>
+                    <strong>{{ quality_checks|length }}</strong>
+                    <small>Active rules</small>
+                </div>
+
+            </div>
+
+
+            <div class="stat-card">
+
+                <div class="stat-icon pipelines-icon">
+                    P
+                </div>
+
+                <div class="stat-content">
+                    <span>Pipelines</span>
+                    <strong>{{ pipelines|length }}</strong>
+                    <small>Connected</small>
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <section class="two-column-grid">
+
+
+            <div class="content-card">
+
+                <div class="section-header">
+
+                    <div>
+                        <h2>Data Source</h2>
+                        <p>Source connected to this dataset.</p>
+                    </div>
+
+                </div>
+
+                <div class="card-body">
+
+                    {% if dataset.data_source %}
+
+                        <div class="source-panel">
+
+                            <div class="source-icon">
+                                {% if dataset.data_source.source_type == "CSV" %}
+                                    CSV
+                                {% elif dataset.data_source.source_type == "DATABASE" %}
+                                    DB
+                                {% elif dataset.data_source.source_type == "URL" %}
+                                    URL
+                                {% else %}
+                                    DS
+                                {% endif %}
+                            </div>
+
+                            <div class="source-details">
+
+                                <h3>
+                                    {{ dataset.data_source.name }}
+                                </h3>
+
+                                <span class="source-type">
+                                    {{ dataset.data_source.source_type|default:"Unknown" }}
+                                </span>
+
+                            </div>
+
+                            <span class="status-badge {% if dataset.data_source.is_active %}active{% else %}inactive{% endif %}">
+                                <span class="status-dot"></span>
+                                {% if dataset.data_source.is_active %}
+                                    Active
+                                {% else %}
+                                    Inactive
+                                {% endif %}
+                            </span>
+
+                        </div>
+
+                    {% else %}
+
+                        <div class="empty-inline">
+                            No data source is configured.
+                        </div>
+
+                    {% endif %}
+
+                </div>
+
+            </div>
+
+
+            <div class="content-card">
+
+                <div class="section-header">
+
+                    <div>
+                        <h2>Dataset Information</h2>
+                        <p>General dataset information.</p>
+                    </div>
+
+                </div>
+
+                <div class="card-body">
+
+                    <div class="info-list">
+
+                        <div class="info-row">
+                            <span>Dataset ID</span>
+                            <strong>#{{ dataset.id }}</strong>
+                        </div>
+
+                        <div class="info-row">
+                            <span>File</span>
+                            <strong class="file-value">
+                                {% if dataset.file_path %}
+                                    {{ dataset.file_path|cut:"datasets/" }}
+                                {% else %}
+                                    —
+                                {% endif %}
+                            </strong>
+                        </div>
+
+                        <div class="info-row">
+                            <span>Created</span>
+                            <strong>
+                                {{ dataset.created_at|date:"d M Y, H:i" }}
+                            </strong>
+                        </div>
+
+                        <div class="info-row">
+                            <span>Updated</span>
+                            <strong>
+                                {{ dataset.updated_at|date:"d M Y, H:i" }}
+                            </strong>
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <section class="content-card">
+
+            <div class="section-header">
+
+                <div>
+                    <h2>Dataset Schema</h2>
+                    <p>
+                        Detected structure and column statistics.
+                    </p>
+                </div>
+
+                <span class="count-badge">
+                    {{ dataset.column_count|default:"0" }} columns
+                </span>
+
+            </div>
+
+
+            {% if schema_columns %}
+
+                <div class="table-wrapper">
+
+                    <table class="schema-table">
+
+                        <thead>
+
+                            <tr>
+                                <th>#</th>
+                                <th>Column</th>
+                                <th>Data Type</th>
+                                <th>Nulls</th>
+                                <th>Null %</th>
+                                <th>Unique Values</th>
+                            </tr>
+
+                        </thead>
+
+                        <tbody>
+
+                            {% for column in schema_columns %}
+
+                                <tr>
+
+                                    <td class="column-index">
+                                        {{ forloop.counter }}
+                                    </td>
+
+                                    <td class="column-name">
+                                        {{ column.name }}
+                                    </td>
+
+                                    <td>
+                                        <span class="type-badge">
+                                            {{ column.dtype|default:"Unknown" }}
+                                        </span>
+                                    </td>
+
+                                    <td>
+                                        {{ column.null_count|default:"0" }}
+                                    </td>
+
+                                    <td>
+                                        {{ column.null_percentage|default:"0" }}%
+                                    </td>
+
+                                    <td>
+                                        {{ column.unique_count|default:"0" }}
+                                    </td>
+
+                                </tr>
+
+                            {% endfor %}
+
+                        </tbody>
+
+                    </table>
+
+                </div>
+
+            {% else %}
+
+                <div class="empty-state">
+
+                    <div class="empty-icon">
+                        ∅
+                    </div>
+
+                    <h3>No schema information</h3>
+
+                    <p>
+                        Schema information is not available for this dataset.
+                    </p>
+
+                </div>
+
+            {% endif %}
+
+        </section>
+
+
+        <section class="content-card">
+
+            <div class="section-header">
+
+                <div>
+                    <h2>Quality Checks</h2>
+                    <p>
+                        Active quality rules configured for this dataset.
+                    </p>
+                </div>
+
+                <div class="section-actions">
+
+                    <span class="count-badge">
+                        {{ quality_checks|length }}
+                    </span>
+
+                    <a
+                        href="{% url 'quality_checks_page' dataset.id %}"
+                        class="primary-btn"
+                    >
+                        Manage Checks
+                    </a>
+
+                </div>
+
+            </div>
+
+
+            {% if quality_checks %}
+
+                <div class="check-list">
+
+                    {% for check in quality_checks %}
+
+                        <div class="check-item">
+
+                            <div class="check-icon">
+                                ✓
+                            </div>
+
+                            <div class="check-content">
+
+                                <div class="check-title-row">
+
+                                    <h3>
+                                        {{ check.name }}
+                                    </h3>
+
+                                    <span class="status-badge active">
+                                        <span class="status-dot"></span>
+                                        Active
+                                    </span>
+
+                                </div>
+
+                                <div class="check-meta">
+
+                                    <span>
+                                        {{ check.check_type|default:"Quality Check" }}
+                                    </span>
+
+                                    {% if check.column_name %}
+                                        <span>
+                                            {{ check.column_name }}
+                                        </span>
+                                    {% else %}
+                                        <span>
+                                            Dataset-level
+                                        </span>
+                                    {% endif %}
+
+                                </div>
+
+                                {% if check.description %}
+                                    <p>
+                                        {{ check.description }}
+                                    </p>
+                                {% endif %}
+
+                            </div>
+
+                        </div>
+
+                    {% endfor %}
+
+                </div>
+
+            {% else %}
+
+                <div class="empty-state compact">
+
+                    <div class="empty-icon">
+                        ✓
+                    </div>
+
+                    <h3>No quality checks</h3>
+
+                    <p>
+                        No quality checks have been configured for this dataset.
+                    </p>
+
+                    <a
+                        href="{% url 'quality_checks_page' dataset.id %}"
+                        class="primary-btn"
+                    >
+                        Add Quality Check
+                    </a>
+
+                </div>
+
+            {% endif %}
+
+        </section>
+
+
+        <section class="content-card">
+
+            <div class="section-header">
+
+                <div>
+                    <h2>Pipelines</h2>
+                    <p>
+                        Pipelines currently using this dataset.
+                    </p>
+                </div>
+
+                <span class="count-badge">
+                    {{ pipelines|length }}
+                </span>
+
+            </div>
+
+
+            {% if pipelines %}
+
+                <div class="pipeline-list">
+
+                    {% for pipeline in pipelines %}
+
+                        <a
+                            href="{% url 'pipeline_detail_page' pipeline.id %}"
+                            class="pipeline-item"
+                        >
+
+                            <div class="pipeline-icon">
+                                P
+                            </div>
+
+                            <div class="pipeline-content">
+
+                                <h3>
+                                    {{ pipeline.name }}
+                                </h3>
+
+                                <p>
+                                    {% if pipeline.description %}
+                                        {{ pipeline.description }}
+                                    {% else %}
+                                        Data processing pipeline.
+                                    {% endif %}
+                                </p>
+
+                                <span class="pipeline-meta">
+                                    Updated {{ pipeline.updated_at|date:"d M Y, H:i" }}
+                                </span>
+
+                            </div>
+
+                            <div class="pipeline-arrow">
+                                →
+                            </div>
+
+                        </a>
+
+                    {% endfor %}
+
+                </div>
+
+            {% else %}
+
+                <div class="empty-state compact">
+
+                    <div class="empty-icon">
+                        P
+                    </div>
+
+                    <h3>No pipelines</h3>
+
+                    <p>
+                        No pipelines are currently connected to this dataset.
+                    </p>
+
+                </div>
+
+            {% endif %}
+
+        </section>
+
+
+    </main>
+
+</div>
+
+{% endblock %}
