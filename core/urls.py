@@ -1,7 +1,16 @@
 from django.urls import path
+from django.shortcuts import redirect
 from core import views
 
+
+def home(request):
+    if request.user.is_authenticated:
+        return redirect("dashboard_page")
+    return redirect("/accounts/login/")
+
+
 urlpatterns = [
+    path("", home, name="home"),
     path("api/health/", views.health_check, name="health_check"),
     path("api/analyze/", views.analyze_dataset, name="analyze_dataset"),
     path("api/runs/", views.pipeline_runs, name="pipeline_runs"),
