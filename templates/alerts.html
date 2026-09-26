@@ -1,0 +1,527 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}DataSentinel | Alerts{% endblock %}
+
+{% block alerts_active %}active{% endblock %}
+
+{% block extra_css %}
+
+<link rel="stylesheet" href="{% static 'css/alerts.css' %}">
+
+{% endblock %}
+
+{% block content %}
+
+{% csrf_token %}
+
+<header class="topbar">
+
+    <div>
+        <h1>Alerts</h1>
+        <p>Monitor pipeline reliability and data incidents.</p>
+    </div>
+
+    <div class="topbar-actions">
+        <button
+            type="button"
+            id="refreshAlerts"
+            class="refresh-btn"
+        >
+            ↻ <span>Refresh</span>
+        </button>
+    </div>
+
+</header>
+
+<section class="page-content">
+
+    <div class="alert-summary-grid">
+
+        <div class="alert-summary-card">
+            <div class="alert-summary-icon total">
+                !
+            </div>
+
+            <div>
+                <span class="alert-summary-label">
+                    Total Alerts
+                </span>
+
+                <strong id="totalAlerts">
+                    0
+                </strong>
+            </div>
+        </div>
+
+        <div class="alert-summary-card">
+            <div class="alert-summary-icon open">
+                ●
+            </div>
+
+            <div>
+                <span class="alert-summary-label">
+                    Open
+                </span>
+
+                <strong id="openAlerts">
+                    0
+                </strong>
+            </div>
+        </div>
+
+        <div class="alert-summary-card">
+            <div class="alert-summary-icon acknowledged">
+                ✓
+            </div>
+
+            <div>
+                <span class="alert-summary-label">
+                    Acknowledged
+                </span>
+
+                <strong id="acknowledgedAlerts">
+                    0
+                </strong>
+            </div>
+        </div>
+
+        <div class="alert-summary-card">
+            <div class="alert-summary-icon critical">
+                !
+            </div>
+
+            <div>
+                <span class="alert-summary-label">
+                    Critical
+                </span>
+
+                <strong id="criticalAlerts">
+                    0
+                </strong>
+            </div>
+        </div>
+
+    </div>
+
+    <div class="page-toolbar alerts-toolbar">
+
+        <div>
+            <h2>System Alerts</h2>
+            <p>
+                Reliability and data quality events detected
+                during pipeline execution.
+            </p>
+        </div>
+
+        <div class="alert-filter-group">
+
+            <input
+                type="search"
+                id="alertSearch"
+                placeholder="Search alerts..."
+                aria-label="Search alerts"
+            >
+
+            <select id="alertSeverityFilter">
+
+                <option value="">
+                    All Severities
+                </option>
+
+                <option value="CRITICAL">
+                    Critical
+                </option>
+
+                <option value="HIGH">
+                    High
+                </option>
+
+                <option value="MEDIUM">
+                    Medium
+                </option>
+
+                <option value="LOW">
+                    Low
+                </option>
+
+            </select>
+
+            <select id="alertStatusFilter">
+
+                <option value="">
+                    All Statuses
+                </option>
+
+                <option value="OPEN">
+                    Open
+                </option>
+
+                <option value="ACKNOWLEDGED">
+                    Acknowledged
+                </option>
+
+                <option value="RESOLVED">
+                    Resolved
+                </option>
+
+            </select>
+
+            <select id="alertTypeFilter">
+
+                <option value="">
+                    All Types
+                </option>
+
+                <option value="PIPELINE_FAILURE">
+                    Pipeline Failure
+                </option>
+
+                <option value="LOW_RELIABILITY">
+                    Low Reliability
+                </option>
+
+                <option value="SCHEMA_DRIFT">
+                    Schema Drift
+                </option>
+
+                <option value="DATA_ANOMALY">
+                    Data Anomaly
+                </option>
+
+                <option value="QUALITY_FAILURE">
+                    Quality Failure
+                </option>
+
+            </select>
+
+        </div>
+
+    </div>
+
+    <div
+        id="alertsLoading"
+        class="loading-state"
+    >
+        Loading alerts...
+    </div>
+
+    <div
+        id="alertsContainer"
+        class="alerts-container hidden"
+    ></div>
+
+    <div
+        id="alertsEmpty"
+        class="alerts-empty hidden"
+    >
+
+        <div class="alerts-empty-icon">
+            ✓
+        </div>
+
+        <h3>No alerts found</h3>
+
+        <p>
+            There are no alerts matching your current filters.
+        </p>
+
+    </div>
+
+    <div
+        id="alertsError"
+        class="error-state hidden"
+    >
+
+        <div class="error-icon">
+            !
+        </div>
+
+        <h3>Unable to load alerts</h3>
+
+        <p>
+            Something went wrong while loading alerts.
+        </p>
+
+        <button
+            type="button"
+            id="retryAlertsButton"
+        >
+            Try Again
+        </button>
+
+    </div>
+
+</section>
+
+<div
+    id="alertToast"
+    class="alert-toast hidden"
+>
+    <span class="alert-toast-icon">
+        ✓
+    </span>
+
+    <span id="alertToastMessage"></span>
+</div>
+
+<div
+    id="alertDetailModal"
+    class="alert-detail-modal hidden"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="alertDetailTitle"
+>
+
+    <div
+        id="alertDetailOverlay"
+        class="alert-detail-overlay"
+    ></div>
+
+    <div class="alert-detail-panel">
+
+        <header class="alert-detail-header">
+
+            <div>
+
+                <span
+                    id="detailAlertType"
+                    class="alert-detail-label"
+                >
+                    ALERT
+                </span>
+
+                <h2 id="alertDetailTitle">
+                    Alert Details
+                </h2>
+
+            </div>
+
+            <button
+                type="button"
+                id="closeAlertDetail"
+                class="alert-detail-close"
+                aria-label="Close alert details"
+            >
+                ×
+            </button>
+
+        </header>
+
+        <div
+            id="alertDetailContent"
+            class="alert-detail-content"
+        >
+
+            <div class="alert-detail-status-row">
+
+                <div class="alert-detail-status">
+
+                    <span class="detail-label">
+                        Severity
+                    </span>
+
+                    <span
+                        id="detailAlertSeverity"
+                        class="alert-severity-badge"
+                    >
+                        —
+                    </span>
+
+                </div>
+
+                <div class="alert-detail-status">
+
+                    <span class="detail-label">
+                        Status
+                    </span>
+
+                    <span
+                        id="detailAlertStatus"
+                        class="alert-status-badge"
+                    >
+                        —
+                    </span>
+
+                </div>
+
+            </div>
+
+            <section class="alert-detail-section">
+
+                <h3>
+                    Alert Message
+                </h3>
+
+                <p id="detailAlertMessage">
+                    —
+                </p>
+
+            </section>
+
+            <section class="alert-detail-section">
+
+                <h3>
+                    Pipeline Information
+                </h3>
+
+                <div class="alert-detail-grid">
+
+                    <div class="alert-detail-card">
+
+                        <span class="detail-label">
+                            Pipeline
+                        </span>
+
+                        <strong id="detailAlertPipeline">
+                            —
+                        </strong>
+
+                    </div>
+
+                    <div class="alert-detail-card">
+
+                        <span class="detail-label">
+                            Pipeline Run
+                        </span>
+
+                        <strong id="detailAlertRun">
+                            —
+                        </strong>
+
+                    </div>
+
+                    <div class="alert-detail-card">
+
+                        <span class="detail-label">
+                            Run Status
+                        </span>
+
+                        <strong id="detailAlertRunStatus">
+                            —
+                        </strong>
+
+                    </div>
+
+                    <div class="alert-detail-card">
+
+                        <span class="detail-label">
+                            Alert Type
+                        </span>
+
+                        <strong id="detailAlertTypeValue">
+                            —
+                        </strong>
+
+                    </div>
+
+                </div>
+
+            </section>
+
+            <section class="alert-detail-section">
+
+                <h3>
+                    Timeline
+                </h3>
+
+                <div class="alert-timeline">
+
+                    <div class="alert-timeline-item">
+
+                        <span class="timeline-dot created"></span>
+
+                        <div>
+                            <span class="detail-label">
+                                Created
+                            </span>
+
+                            <strong id="detailAlertCreated">
+                                —
+                            </strong>
+                        </div>
+
+                    </div>
+
+                    <div class="alert-timeline-item">
+
+                        <span class="timeline-dot acknowledged"></span>
+
+                        <div>
+                            <span class="detail-label">
+                                Acknowledged
+                            </span>
+
+                            <strong id="detailAlertAcknowledged">
+                                —
+                            </strong>
+                        </div>
+
+                    </div>
+
+                    <div class="alert-timeline-item">
+
+                        <span class="timeline-dot resolved"></span>
+
+                        <div>
+                            <span class="detail-label">
+                                Resolved
+                            </span>
+
+                            <strong id="detailAlertResolved">
+                                —
+                            </strong>
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </section>
+
+            <section class="alert-detail-section">
+
+                <h3>
+                    Event Metadata
+                </h3>
+
+                <pre
+                    id="detailAlertMetadata"
+                    class="alert-metadata"
+                >No additional metadata.</pre>
+
+            </section>
+
+            <div class="alert-detail-actions">
+
+                <button
+                    type="button"
+                    id="acknowledgeAlertButton"
+                    class="alert-action-button acknowledge"
+                >
+                    Acknowledge
+                </button>
+
+                <button
+                    type="button"
+                    id="resolveAlertButton"
+                    class="alert-action-button resolve"
+                >
+                    Resolve Alert
+                </button>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+
+<script src="{% static 'js/alerts.js' %}"></script>
+
+{% endblock %}

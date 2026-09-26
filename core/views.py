@@ -1,48 +1,1040 @@
-import json
 import os
-
-from decimal import Decimal
-
+import json
+from pathlib import Path
+from django.utils.timezone import now
+from django.utils.text import get_valid_filename
+from uuid import uuid4
 import pandas as pd
-
 from django.conf import settings
 from django.contrib import messages
-from django.contrib.auth.models import User
-from django.db.models import Avg, Count
+from django.contrib.auth.decorators import login_required
+from django.db import transaction
+from django.db.models import Avg, Count, Max, Q
 from django.http import JsonResponse
-from django.shortcuts import (get_object_or_404,redirect,render,)
-from django.views.decorators.csrf import csrf_exempt
-from django.views.decorators.http import require_POST
+from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
+from django.views.decorators.http import require_GET, require_POST
 
+from core.services.ingestion.universal_loader import UniversalLoader
 from core.forms import QualityCheckForm
-
-from core.models import (Dataset,DataSource,Pipeline,PipelineRun,QualityCheck,QualityIssue,QualityResult,)
+from core.models import (
+    DataSource,
+    Dataset,
+    Pipeline,
+    PipelineRun,
+    QualityCheck,
+    QualityIssue,
+    QualityResult,
+)
 from core.services.pipeline import PipelineService
 from core.services.quality.engine import QualityEngine
-from core.services.quality.persistence import (
-    QualityPersistenceService,
-)
+from core.models import Alert
+
+def _authenticated_user(request):
+    if not request.user.is_authenticated:
+        return None
+
+    return request.user
 
 
+def _dataset_queryset(request):
+    user = _authenticated_user(request)
 
-def dashboard_page(request):
-    return render(request, "dashboard.html")
+    if user is None:
+        return Dataset.objects.none()
 
+    return (
+        Dataset.objects
+        .select_related(
+            "data_source",
+            "owner",
+        )
+        .filter(
+            owner=user,
+            is_active=True,
+        )
+        .annotate(
+            pipeline_count=Count(
+                "pipelines",
+                distinct=True,
+            ),
+            quality_check_count=Count(
+                "quality_checks",
+                filter=Q(
+                    quality_checks__is_active=True
+                ),
+                distinct=True,
+            ),
+        )
+        .order_by("-updated_at")
+    )
+
+
+def _pipeline_queryset(request):
+    user = _authenticated_user(request)
+
+    if user is None:
+        return Pipeline.objects.none()
+
+    return (
+        Pipeline.objects
+        .select_related("dataset")
+        .filter(
+            dataset__owner=user,
+            dataset__is_active=True,
+        )
+        .annotate(
+            run_count=Count(
+                "runs",
+                distinct=True,
+            ),
+            average_quality=Avg(
+                "runs__quality_score",
+            ),
+            last_run_at=Max(
+                "runs__started_at",
+            ),
+        )
+        .order_by("name")
+    )
+
+
+def _run_queryset(request):
+    user = _authenticated_user(request)
+
+    if user is None:
+        return PipelineRun.objects.none()
+
+    return (
+        PipelineRun.objects
+        .select_related(
+            "pipeline",
+            "pipeline__dataset",
+        )
+        .filter(
+            pipeline__dataset__owner=user,
+            pipeline__dataset__is_active=True,
+        )
+        .order_by("-started_at")
+    )
+
+
+def _issue_queryset(request):
+    user = _authenticated_user(request)
+
+    if user is None:
+        return QualityIssue.objects.none()
+
+    return (
+        QualityIssue.objects
+        .select_related(
+            "quality_result",
+            "quality_result__quality_check",
+            "quality_result__pipeline_run",
+            "quality_result__pipeline_run__pipeline",
+            "quality_result__pipeline_run__pipeline__dataset",
+        )
+        .filter(
+            quality_result__pipeline_run__pipeline__dataset__owner=user,
+            quality_result__pipeline_run__pipeline__dataset__is_active=True,
+        )
+        .order_by("-created_at")
+    )
+
+def _build_schema_snapshot(dataframe):
+    columns = []
+
+    for column in dataframe.columns:
+        series = dataframe[column]
+
+        null_count = int(
+            series.isna().sum()
+        )
+
+        null_percentage = round(
+            float(series.isna().mean() * 100),
+            2,
+        )
+
+        unique_count = _safe_unique_count(
+            series
+        )
+
+        columns.append(
+            {
+                "name": str(column),
+                "dtype": str(series.dtype),
+                "null_count": null_count,
+                "null_percentage": null_percentage,
+                "unique_count": unique_count,
+            }
+        )
+
+    return {
+        "columns": columns,
+    }
+
+
+def _safe_unique_count(series):
+    for value in series:
+        if isinstance(
+            value,
+            (dict, list, tuple, set),
+        ):
+            values = []
+
+            for item in series.dropna():
+                try:
+                    values.append(
+                        repr(item)
+                    )
+                except Exception:
+                    values.append(
+                        str(type(item))
+                    )
+
+            return int(
+                len(set(values))
+            )
+
+    try:
+        return int(
+            series.nunique(dropna=True)
+        )
+    except TypeError:
+        values = []
+
+        for item in series.dropna():
+            try:
+                values.append(
+                    repr(item)
+                )
+            except Exception:
+                values.append(
+                    str(type(item))
+                )
+
+        return int(
+            len(set(values))
+        )
+
+
+def _create_default_quality_checks(
+    dataset,
+    dataframe,
+):
+    engine = QualityEngine()
+
+    analysis = engine.run_dataframe_checks(
+        dataframe=dataframe,
+        dataset_name=dataset.name,
+        check_config=None,
+    )
+
+    suggestions = analysis.get(
+        "suggestions",
+        [],
+    )
+
+    supported_types = {
+        QualityCheck.CheckType.NOT_NULL,
+        QualityCheck.CheckType.UNIQUE,
+        QualityCheck.CheckType.VALID_EMAIL,
+        QualityCheck.CheckType.VALID_DATE,
+        QualityCheck.CheckType.NUMERIC_VALIDITY,
+        QualityCheck.CheckType.RANGE,
+        QualityCheck.CheckType.DUPLICATE,
+    }
+
+    created_checks = []
+
+    for suggestion in suggestions:
+        check_type = suggestion.get("rule")
+
+        if check_type not in supported_types:
+            continue
+
+        column_name = str(
+            suggestion.get("column") or ""
+        )
+
+        quality_check = (
+            QualityCheck.objects
+            .filter(
+                dataset=dataset,
+                check_type=check_type,
+                column_name=column_name,
+            )
+            .order_by("id")
+            .first()
+        )
+
+        if quality_check:
+            if not quality_check.is_active:
+                quality_check.is_active = True
+                quality_check.save(
+                    update_fields=[
+                        "is_active",
+                        "updated_at",
+                    ]
+                )
+
+            created_checks.append(
+                quality_check
+            )
+            continue
+
+        configuration = {}
+
+        for key, value in suggestion.items():
+            if key not in {
+                "rule",
+                "column",
+            }:
+                configuration[key] = value
+
+        column_label = (
+            column_name
+            or "dataset"
+        )
+
+        quality_check = QualityCheck.objects.create(
+            dataset=dataset,
+            name=(
+                f"{check_type.replace('_', ' ').title()} "
+                f"- {column_label}"
+            ),
+            check_type=check_type,
+            column_name=column_name,
+            configuration=configuration,
+            is_active=True,
+        )
+
+        created_checks.append(
+            quality_check
+        )
+
+    if created_checks:
+        return created_checks
+
+    for column in dataframe.columns:
+        column_name = str(column)
+
+        quality_check = (
+            QualityCheck.objects
+            .filter(
+                dataset=dataset,
+                check_type=QualityCheck.CheckType.NOT_NULL,
+                column_name=column_name,
+            )
+            .order_by("id")
+            .first()
+        )
+
+        if quality_check is None:
+            quality_check = QualityCheck.objects.create(
+                dataset=dataset,
+                name=f"Not Null - {column_name}",
+                check_type=QualityCheck.CheckType.NOT_NULL,
+                column_name=column_name,
+                configuration={},
+                is_active=True,
+            )
+        elif not quality_check.is_active:
+            quality_check.is_active = True
+            quality_check.save(
+                update_fields=[
+                    "is_active",
+                    "updated_at",
+                ]
+            )
+
+        created_checks.append(
+            quality_check
+        )
+
+    duplicate_check = (
+        QualityCheck.objects
+        .filter(
+            dataset=dataset,
+            check_type=QualityCheck.CheckType.DUPLICATE,
+            column_name="",
+        )
+        .order_by("id")
+        .first()
+    )
+
+    if duplicate_check is None:
+        duplicate_check = QualityCheck.objects.create(
+            dataset=dataset,
+            name="Duplicate Rows - dataset",
+            check_type=QualityCheck.CheckType.DUPLICATE,
+            column_name="",
+            configuration={},
+            is_active=True,
+        )
+    elif not duplicate_check.is_active:
+        duplicate_check.is_active = True
+        duplicate_check.save(
+            update_fields=[
+                "is_active",
+                "updated_at",
+            ]
+        )
+
+    created_checks.append(
+        duplicate_check
+    )
+
+    return created_checks
+
+
+def _create_pipeline(dataset):
+    pipeline = (
+        Pipeline.objects
+        .filter(dataset=dataset)
+        .order_by("id")
+        .first()
+    )
+
+    if pipeline:
+        if pipeline.status != Pipeline.Status.ACTIVE:
+            pipeline.status = Pipeline.Status.ACTIVE
+            pipeline.save(
+                update_fields=[
+                    "status",
+                    "updated_at",
+                ]
+            )
+
+        return pipeline
+
+    return Pipeline.objects.create(
+        name=f"{dataset.name} Quality Pipeline",
+        description=(
+            "Automatic data-quality monitoring pipeline."
+        ),
+        dataset=dataset,
+        status=Pipeline.Status.ACTIVE,
+        schedule="",
+    )
+
+
+def _create_dataset_from_upload(request):
+    uploaded_file = request.FILES.get("file")
+    if not uploaded_file:
+        raise ValueError("Please select a dataset file.")
+
+    original_name = uploaded_file.name or ""
+    if "." not in original_name:
+        raise ValueError("Unsupported dataset format. Please upload CSV, JSON, Excel, Parquet, TSV, or XML.")
+
+    extension = Path(original_name).suffix.lower()
+    supported_formats = UniversalLoader.SUPPORTED_FORMATS
+
+    if extension not in supported_formats:
+        raise ValueError(
+            f"Unsupported dataset format '{extension}'. "
+            "Supported formats are CSV, JSON, Excel, Parquet, TSV, and XML."
+        )
+
+    file_format = supported_formats[extension]
+    name = (request.POST.get("name", "").strip() or Path(original_name).stem)
+    description = request.POST.get("description", "").strip()
+
+    upload_directory = Path(settings.MEDIA_ROOT) / "datasets"
+    upload_directory.mkdir(parents=True, exist_ok=True)
+
+    safe_filename = get_valid_filename(original_name)
+    if not safe_filename:
+        raise ValueError("The uploaded file has an invalid filename.")
+
+    file_path = upload_directory / safe_filename
+    if file_path.exists():
+        timestamp = timezone.now().strftime("%Y%m%d%H%M%S")
+        file_path = upload_directory / f"{Path(safe_filename).stem}_{timestamp}{Path(safe_filename).suffix}"
+
+    try:
+        with file_path.open("wb+") as destination:
+            for chunk in uploaded_file.chunks():
+                destination.write(chunk)
+
+        loader = UniversalLoader()
+        dataframe = loader.read(source=str(file_path), file_format=file_format)
+
+        if dataframe.empty:
+            raise ValueError("The uploaded dataset contains no rows.")
+        if len(dataframe.columns) == 0:
+            raise ValueError("The uploaded dataset contains no columns.")
+
+        source_type_map = {
+            "CSV": DataSource.SourceType.CSV,
+            "JSON": DataSource.SourceType.JSON,
+            "EXCEL": DataSource.SourceType.EXCEL,
+            "PARQUET": DataSource.SourceType.PARQUET,
+            "TSV": DataSource.SourceType.TSV,
+            "XML": DataSource.SourceType.XML,
+        }
+        source_type = source_type_map[file_format]
+        file_size = file_path.stat().st_size
+
+        with transaction.atomic():
+            data_source = DataSource.objects.create(
+                name=f"{name} Source",
+                source_type=source_type,
+            )
+            dataset = Dataset.objects.create(
+                name=name,
+                description=description,
+                owner=request.user,
+                data_source=data_source,
+                file_path=str(file_path),
+                file_format=file_format,
+                file_size=file_size,
+                row_count=len(dataframe),
+                column_count=len(dataframe.columns),
+                is_active=True,
+                last_processed_at=timezone.now(),
+                schema_snapshot=_build_schema_snapshot(dataframe),
+            )
+            pipeline = _create_pipeline(dataset)
+            _create_default_quality_checks(dataset, dataframe)
+
+        return dataset, pipeline
+
+    except ValueError:
+        if file_path.exists():
+            file_path.unlink()
+        raise
+    except Exception as exc:
+        if file_path.exists():
+            file_path.unlink()
+        raise ValueError(f"Unable to create dataset from uploaded file: {exc}") from exc
+
+
+def landing_page(request):
+    if request.user.is_authenticated:
+        return redirect("dashboard_page")
+
+    demo_metrics = {
+        "datasets": 12,
+        "pipelines": 8,
+        "pipeline_runs": 247,
+        "quality_score": 94.6,
+        "open_issues": 3,
+    }
+
+    quality_trend_data = [
+        {"date": "Mon", "score": 82},
+        {"date": "Tue", "score": 88},
+        {"date": "Wed", "score": 85},
+        {"date": "Thu", "score": 92},
+        {"date": "Fri", "score": 94},
+        {"date": "Sat", "score": 91},
+        {"date": "Sun", "score": 95},
+    ]
+
+    pipeline_health = [
+        {
+            "name": "Customer Data Pipeline",
+            "status": "HEALTHY",
+            "quality_score": 98.2,
+        },
+        {
+            "name": "Sales Analytics Pipeline",
+            "status": "HEALTHY",
+            "quality_score": 96.4,
+        },
+        {
+            "name": "Product Inventory Pipeline",
+            "status": "WARNING",
+            "quality_score": 78.5,
+        },
+        {
+            "name": "Marketing Events Pipeline",
+            "status": "CRITICAL",
+            "quality_score": 42.3,
+        },
+    ]
+
+    return render(
+        request,
+        "landing.html",
+        {
+            "demo_metrics": demo_metrics,
+            "quality_trend_data": quality_trend_data,
+            "pipeline_health": pipeline_health,
+        },
+    )
+
+
+@login_required
+def user_dashboard(request):
+    datasets = _dataset_queryset(request)
+    pipelines = _pipeline_queryset(request)
+    runs = _run_queryset(request)
+    issues_queryset = _issue_queryset(request)
+
+    total_datasets = datasets.count()
+    total_pipelines = pipelines.count()
+    total_runs = runs.count()
+
+    successful_runs = runs.filter(
+        status=PipelineRun.Status.SUCCESS
+    ).count()
+
+    failed_runs = runs.filter(
+        status=PipelineRun.Status.FAILED
+    ).count()
+
+    running_runs = runs.filter(
+        status=PipelineRun.Status.RUNNING
+    ).count()
+
+    open_issues = issues_queryset.filter(
+        status=QualityIssue.Status.OPEN
+    ).count()
+
+    acknowledged_issues = issues_queryset.filter(
+        status=QualityIssue.Status.ACKNOWLEDGED
+    ).count()
+
+    resolved_issues = issues_queryset.filter(
+        status=QualityIssue.Status.RESOLVED
+    ).count()
+
+    average_quality = (
+        runs
+        .filter(
+            quality_score__isnull=False
+        )
+        .aggregate(
+            value=Avg("quality_score")
+        )["value"]
+    )
+
+    if average_quality is not None:
+        average_quality = round(
+            float(average_quality),
+            1,
+        )
+
+    total_checks = QualityResult.objects.filter(
+        pipeline_run__pipeline__dataset__owner=request.user,
+        pipeline_run__pipeline__dataset__is_active=True,
+    ).count()
+
+    passed_checks = QualityResult.objects.filter(
+        pipeline_run__pipeline__dataset__owner=request.user,
+        pipeline_run__pipeline__dataset__is_active=True,
+        passed=True,
+    ).count()
+
+    failed_checks = QualityResult.objects.filter(
+        pipeline_run__pipeline__dataset__owner=request.user,
+        pipeline_run__pipeline__dataset__is_active=True,
+        passed=False,
+    ).count()
+
+    issue_severity = {
+        "critical": issues_queryset.filter(
+            severity=QualityIssue.Severity.CRITICAL
+        ).count(),
+        "high": issues_queryset.filter(
+            severity=QualityIssue.Severity.HIGH
+        ).count(),
+        "medium": issues_queryset.filter(
+            severity=QualityIssue.Severity.MEDIUM
+        ).count(),
+        "low": issues_queryset.filter(
+            severity=QualityIssue.Severity.LOW
+        ).count(),
+    }
+
+    latest_run = runs.first()
+
+    recent_runs = list(runs[:5])
+
+    quality_trend_data = [
+        {
+            "id": run.id,
+            "quality_score": (
+                float(run.quality_score)
+                if run.quality_score is not None
+                else None
+            ),
+            "date": run.started_at.strftime(
+                "%b %d"
+            ),
+        }
+        for run in recent_runs
+    ]
+
+    recent_issues = list(
+        issues_queryset[:5]
+    )
+
+    pipeline_health = []
+
+    for pipeline in pipelines[:5]:
+        latest_pipeline_run = (
+            pipeline.runs
+            .order_by("-started_at")
+            .first()
+        )
+
+        if latest_pipeline_run is None:
+            health_status = "NO_RUN"
+
+        elif (
+            latest_pipeline_run.status
+            == PipelineRun.Status.RUNNING
+        ):
+            health_status = "RUNNING"
+
+        elif (
+            latest_pipeline_run.status
+            == PipelineRun.Status.FAILED
+        ):
+            health_status = "FAILED"
+
+        elif (
+            latest_pipeline_run.quality_score is not None
+            and float(
+                latest_pipeline_run.quality_score
+            ) < 50
+        ):
+            health_status = "CRITICAL"
+
+        elif (
+            latest_pipeline_run.quality_score is not None
+            and float(
+                latest_pipeline_run.quality_score
+            ) < 80
+        ):
+            health_status = "WARNING"
+
+        else:
+            health_status = "HEALTHY"
+
+        pipeline_health.append(
+            {
+                "pipeline": pipeline,
+                "latest_run": latest_pipeline_run,
+                "health_status": health_status,
+            }
+        )
+
+    if total_datasets == 0:
+        dashboard_state = "new"
+
+    elif total_pipelines == 0:
+        dashboard_state = "dataset_added"
+
+    elif total_runs == 0:
+        dashboard_state = "pipeline_created"
+
+    else:
+        dashboard_state = "active"
+
+    if dashboard_state == "new":
+        getting_started_step = 1
+
+    elif dashboard_state == "dataset_added":
+        getting_started_step = 2
+
+    elif dashboard_state == "pipeline_created":
+        getting_started_step = 3
+
+    else:
+        getting_started_step = 4
+
+    quality_percentage = 0
+
+    if total_checks:
+        quality_percentage = round(
+            (passed_checks / total_checks) * 100,
+            1,
+        )
+
+    success_rate = 0
+
+    if total_runs:
+        success_rate = round(
+            (successful_runs / total_runs) * 100,
+            1,
+        )
+
+    return render(
+        request,
+        "dashboard.html",
+        {
+            "dashboard_state": dashboard_state,
+            "getting_started_step": getting_started_step,
+
+            "total_datasets": total_datasets,
+            "total_pipelines": total_pipelines,
+            "total_runs": total_runs,
+
+            "successful_runs": successful_runs,
+            "failed_runs": failed_runs,
+            "running_runs": running_runs,
+            "success_rate": success_rate,
+
+            "average_quality": average_quality,
+            "quality_percentage": quality_percentage,
+
+            "total_checks": total_checks,
+            "passed_checks": passed_checks,
+            "failed_checks": failed_checks,
+
+            "open_issues": open_issues,
+            "acknowledged_issues": acknowledged_issues,
+            "resolved_issues": resolved_issues,
+            "issue_severity": issue_severity,
+
+            "latest_run": latest_run,
+            "recent_runs": recent_runs,
+            "quality_trend_data": quality_trend_data,
+            "recent_issues": recent_issues,
+
+            "datasets": datasets[:5],
+            "pipelines": pipelines[:5],
+            "pipeline_health": pipeline_health,
+        },
+    )
+
+
+@login_required
 def datasets_page(request):
-    return render(request, "datasets.html")
+    if request.method == "POST":
+        try:
+            dataset, pipeline = _create_dataset_from_upload(
+                request
+            )
 
+            check_count = (
+                dataset.quality_checks
+                .filter(is_active=True)
+                .count()
+            )
 
+            messages.success(
+                request,
+                (
+                    f'Dataset "{dataset.name}" '
+                    f"uploaded successfully with "
+                    f"{check_count} quality checks "
+                    f'and pipeline "{pipeline.name}".'
+                ),
+            )
+
+            return redirect(
+                "dataset_detail_page",
+                dataset_id=dataset.id,
+            )
+
+        except ValueError as exc:
+            messages.error(
+                request,
+                str(exc),
+            )
+
+            return redirect(
+                "datasets_page"
+            )
+
+        except Exception as exc:
+            messages.error(
+                request,
+                f"Dataset setup failed: {exc}",
+            )
+
+            return redirect(
+                "datasets_page"
+            )
+
+    datasets = _dataset_queryset(
+        request
+    )
+
+    total_datasets = datasets.count()
+
+    total_pipelines = (
+        Pipeline.objects
+        .filter(
+            dataset__owner=request.user,
+            dataset__is_active=True,
+        )
+        .count()
+    )
+
+    total_checks = (
+        QualityCheck.objects
+        .filter(
+            dataset__owner=request.user,
+            dataset__is_active=True,
+            is_active=True,
+        )
+        .count()
+    )
+
+    average_quality = (
+        PipelineRun.objects
+        .filter(
+            pipeline__dataset__owner=request.user,
+            pipeline__dataset__is_active=True,
+            quality_score__isnull=False,
+        )
+        .aggregate(
+            value=Avg("quality_score")
+        )["value"]
+    )
+
+    if average_quality is not None:
+        average_quality = round(
+            float(average_quality),
+            1,
+        )
+
+    return render(
+        request,
+        "datasets.html",
+        {
+            "datasets": datasets,
+            "total_datasets": total_datasets,
+            "total_pipelines": total_pipelines,
+            "total_checks": total_checks,
+            "average_quality": average_quality,
+        },
+    )
+
+@login_required
 def runs_page(request):
-    return render(request, "runs.html")
+    runs = _run_queryset(request)
 
-
+    return render(
+        request,
+        "runs.html",
+        {
+            "runs": runs,
+        },
+    )
+@login_required
 def pipelines_page(request):
-    return render(request, "pipelines.html")
+    pipelines = _pipeline_queryset(request)
+    datasets = _dataset_queryset(request)
+
+    return render(
+        request,
+        "pipelines.html",
+        {
+            "pipelines": pipelines,
+            "datasets": datasets,
+        },
+    )
 
 
+@require_POST
+@login_required
+def create_pipeline(request):
+    name = request.POST.get("name", "").strip()
+    description = request.POST.get("description", "").strip()
+    dataset_id = request.POST.get("dataset_id", "").strip()
+    schedule = request.POST.get("schedule", "").strip()
+
+    if not name:
+        messages.error(request, "Pipeline name is required.")
+        return redirect("pipelines_page")
+
+    if len(name) > 150:
+        messages.error(
+            request,
+            "Pipeline name must be 150 characters or fewer.",
+        )
+        return redirect("pipelines_page")
+
+    if not dataset_id:
+        messages.error(request, "Please select a dataset.")
+        return redirect("pipelines_page")
+
+    try:
+        dataset = Dataset.objects.get(
+            id=dataset_id,
+            owner=request.user,
+            is_active=True,
+        )
+    except Dataset.DoesNotExist:
+        messages.error(
+            request,
+            "The selected dataset is not available.",
+        )
+        return redirect("pipelines_page")
+
+    pipeline = Pipeline.objects.create(
+        name=name,
+        description=description,
+        dataset=dataset,
+        status=Pipeline.Status.ACTIVE,
+        schedule=schedule,
+    )
+
+    messages.success(
+        request,
+        f'Pipeline "{pipeline.name}" was created successfully.',
+    )
+
+    return redirect(
+        "pipeline_detail_page",
+        pipeline_id=pipeline.id,
+    )
+
+@login_required
 def issues_page(request):
-    return render(request, "issues.html")
+    severity = (
+        request.GET.get(
+            "severity",
+            "",
+        )
+        .strip()
+        .upper()
+    )
 
+    status = (
+        request.GET.get(
+            "status",
+            "",
+        )
+        .strip()
+        .upper()
+    )
+
+    issues_queryset = _issue_queryset(
+        request
+    )
+
+    if severity:
+        issues_queryset = issues_queryset.filter(
+            severity=severity
+        )
+
+    if status:
+        issues_queryset = issues_queryset.filter(
+            status=status
+        )
+
+    return render(
+        request,
+        "issues.html",
+        {
+            "issues": issues_queryset,
+            "selected_severity": severity,
+            "selected_status": status,
+        },
+    )
+
+
+@require_GET
 def health_check(request):
     return JsonResponse(
         {
@@ -52,19 +1044,12 @@ def health_check(request):
     )
 
 
-@csrf_exempt
+@require_POST
+@login_required
 def analyze_dataset(request):
-    
-
-    if request.method != "POST":
-        return JsonResponse(
-            {
-                "error": "Only POST requests are allowed."
-            },
-            status=405,
-        )
-
-    uploaded_file = request.FILES.get("file")
+    uploaded_file = request.FILES.get(
+        "file"
+    )
 
     if uploaded_file is None:
         return JsonResponse(
@@ -74,7 +1059,9 @@ def analyze_dataset(request):
             status=400,
         )
 
-    if not uploaded_file.name.lower().endswith(".csv"):
+    if not uploaded_file.name.lower().endswith(
+        ".csv"
+    ):
         return JsonResponse(
             {
                 "error": "Only CSV files are supported."
@@ -83,9 +1070,31 @@ def analyze_dataset(request):
         )
 
     try:
-        import pandas as pd
+        dataframe = pd.read_csv(
+            uploaded_file
+        )
 
-        dataframe = pd.read_csv(uploaded_file)
+        if dataframe.empty:
+            return JsonResponse(
+                {
+                    "error": (
+                        "The uploaded CSV file "
+                        "contains no rows."
+                    )
+                },
+                status=400,
+            )
+
+        if len(dataframe.columns) == 0:
+            return JsonResponse(
+                {
+                    "error": (
+                        "The uploaded CSV file "
+                        "contains no columns."
+                    )
+                },
+                status=400,
+            )
 
         engine = QualityEngine()
 
@@ -94,34 +1103,6 @@ def analyze_dataset(request):
             dataset_name=uploaded_file.name,
             check_config=None,
         )
-
-        from core.models import Dataset
-
-        dataset = Dataset.objects.filter(
-            name=uploaded_file.name
-        ).first()
-
-        if dataset is not None:
-
-            pipeline = Pipeline.objects.filter(
-                dataset=dataset
-            ).first()
-
-            if pipeline is not None:
-
-                persistence = QualityPersistenceService()
-
-                pipeline_run = persistence.save_run(
-                    dataset=dataset,
-                    pipeline=pipeline,
-                    engine_result=result,
-                )
-
-                result["persistence"] = {
-                    "pipeline_run_id": pipeline_run.id,
-                    "dataset_id": dataset.id,
-                    "pipeline_id": pipeline.id,
-                }
 
         return JsonResponse(
             result,
@@ -137,49 +1118,80 @@ def analyze_dataset(request):
             status=500,
         )
 
-@csrf_exempt
-def run_pipeline(request, pipeline_id):
-    if request.method != "POST":
-        return JsonResponse(
-            {
-                "error": "Only POST requests are allowed."
-            },
-            status=405,
-        )
+
+@require_POST
+@login_required
+def run_pipeline(
+    request,
+    pipeline_id,
+):
+    pipeline = get_object_or_404(
+        Pipeline.objects.select_related(
+            "dataset"
+        ),
+        id=pipeline_id,
+        dataset__owner=request.user,
+        dataset__is_active=True,
+    )
 
     try:
-        service = PipelineService()
-
-        pipeline_run = service.run_pipeline(pipeline_id)
+        pipeline_run = (
+            PipelineService()
+            .run_pipeline(
+                pipeline.id
+            )
+        )
 
         return JsonResponse(
             {
-                "message": "Pipeline executed successfully.",
+                "message": (
+                    "Pipeline executed successfully."
+                ),
                 "run": {
                     "id": pipeline_run.id,
-                    "pipeline_id": pipeline_run.pipeline.id,
-                    "pipeline": pipeline_run.pipeline.name,
-                    "dataset": pipeline_run.pipeline.dataset.name,
+                    "pipeline_id": (
+                        pipeline_run.pipeline.id
+
+                    ),
+                    "pipeline": (
+                        pipeline_run.pipeline.name
+                    ),
+                    "dataset": (
+                        pipeline_run.pipeline.dataset.name
+                    ),
                     "status": pipeline_run.status,
-                    "rows_processed": pipeline_run.rows_processed,
+                    "rows_processed": (
+                        pipeline_run.rows_processed
+                    ),
                     "quality_score": (
-                        float(pipeline_run.quality_score)
+                        float(
+                            pipeline_run.quality_score
+                        )
                         if pipeline_run.quality_score is not None
                         else None
                     ),
-                    "started_at": pipeline_run.started_at,
-                    "completed_at": pipeline_run.completed_at,
-                }
+                    "reliability_score": (
+                        float(
+                            pipeline_run.reliability_score
+                        )
+                        if pipeline_run.reliability_score is not None
+                        else None
+                    ),
+                    "reliability_grade": (
+                        pipeline_run.reliability_grade
+                    ),
+                    "reliability_status": (
+                        pipeline_run.reliability_status
+                    ),
+                    "started_at": (
+                        pipeline_run.started_at
+                    ),
+                    "completed_at": (
+                        pipeline_run.completed_at
+                    ),
+                },
             },
             status=200,
-        )
-
-    except Pipeline.DoesNotExist:
-        return JsonResponse(
-            {
-                "error": "Pipeline not found."
-            },
-            status=404,
         )
 
     except ValueError as exc:
@@ -193,54 +1205,57 @@ def run_pipeline(request, pipeline_id):
     except Exception as exc:
         return JsonResponse(
             {
-                "error": "Pipeline execution failed.",
+                "error": (
+                    "Pipeline execution failed."
+                ),
                 "details": str(exc),
             },
             status=500,
         )
 
-
-def pipeline_runs(request):
-    """
-    Return historical quality-analysis runs.
-    """
-
-    if request.method != "GET":
-        return JsonResponse(
-            {
-                "error": "Only GET requests are allowed."
-            },
-            status=405,
-        )
-
-    runs = (
-        PipelineRun.objects
-        .select_related(
-            "pipeline",
-            "pipeline__dataset",
-        )
-        .order_by("-started_at")
+@require_GET
+@login_required
+def pipeline_runs(
+    request
+):
+    runs = _run_queryset(
+        request
     )
 
-    data = []
-
-    for run in runs:
-        data.append(
-            {
-                "id": run.id,
-                "pipeline": run.pipeline.name,
-                "dataset": run.pipeline.dataset.name,
-                "status": run.status,
-                "rows_processed": run.rows_processed,
-                "quality_score": (
-                    float(run.quality_score)
-                    if run.quality_score is not None
-                    else None
-                ),
-                "started_at": run.started_at,
-                "completed_at": run.completed_at,
-            }
-        )
+    data = [
+        {
+            "id": run.id,
+            "pipeline": run.pipeline.name,
+            "dataset": run.pipeline.dataset.name,
+            "status": run.status,
+            "rows_processed": (
+                run.rows_processed
+            ),
+            "quality_score": (
+                float(
+                    run.quality_score
+                )
+                if run.quality_score is not None
+                else None
+            ),
+            "reliability_score": (
+                float(
+                    run.reliability_score
+                )
+                if run.reliability_score is not None
+                else None
+            ),
+            "reliability_grade": (
+                run.reliability_grade
+            ),
+            "reliability_status": (
+                run.reliability_status
+            ),
+            "started_at": run.started_at,
+            "completed_at": run.completed_at,
+        }
+        for run in runs
+    ]
 
     return JsonResponse(
         {
@@ -248,37 +1263,22 @@ def pipeline_runs(request):
             "runs": data,
         }
     )
-
-
-@csrf_exempt
+@require_GET
+@login_required
 def pipeline_run_detail(request, run_id):
-    """
-    Return detailed results for one pipeline run as JSON.
-    """
-
-    if request.method != "GET":
-        return JsonResponse(
-            {
-                "error": "Only GET requests are allowed."
-            },
-            status=405,
-        )
-
     try:
         run = (
             PipelineRun.objects
-            .select_related(
-                "pipeline",
-                "pipeline__dataset",
+            .select_related("pipeline", "pipeline__dataset")
+            .get(
+                id=run_id,
+                pipeline__dataset__owner=request.user,
+                pipeline__dataset__is_active=True,
             )
-            .get(id=run_id)
         )
-
     except PipelineRun.DoesNotExist:
         return JsonResponse(
-            {
-                "error": "Pipeline run not found."
-            },
+            {"error": "Pipeline run not found."},
             status=404,
         )
 
@@ -290,7 +1290,6 @@ def pipeline_run_detail(request, run_id):
     )
 
     checks = []
-
     for result in results:
         checks.append(
             {
@@ -319,22 +1318,26 @@ def pipeline_run_detail(request, run_id):
                         "ai_analysis": issue.ai_analysis,
                         "ai_recommendation": issue.ai_recommendation,
                         "created_at": issue.created_at,
+                        "resolved_at": issue.resolved_at,
                     }
                     for issue in result.issues.all()
                 ],
             }
         )
 
-    passed_checks = sum(
-        1
-        for check in checks
-        if check["passed"]
+    passed_checks = sum(1 for check in checks if check["passed"])
+    failed_checks = len(checks) - passed_checks
+
+    reliability_metadata = (
+        run.metadata.get("reliability", {})
+        if isinstance(run.metadata, dict)
+        else {}
     )
 
-    failed_checks = sum(
-        1
-        for check in checks
-        if not check["passed"]
+    rca_metadata = (
+        run.metadata.get("rca", {})
+        if isinstance(run.metadata, dict)
+        else {}
     )
 
     return JsonResponse(
@@ -355,6 +1358,18 @@ def pipeline_run_detail(request, run_id):
                 if run.quality_score is not None
                 else None
             ),
+            "reliability": {
+                "score": (
+                    float(run.reliability_score)
+                    if run.reliability_score is not None
+                    else None
+                ),
+                "grade": run.reliability_grade,
+                "status": run.reliability_status,
+                "breakdown": reliability_metadata.get("breakdown", {}),
+                "reasons": reliability_metadata.get("reasons", []),
+            },
+            "rca": rca_metadata,
             "started_at": run.started_at,
             "completed_at": run.completed_at,
             "error_message": run.error_message,
@@ -368,49 +1383,21 @@ def pipeline_run_detail(request, run_id):
     )
 
 
-@csrf_exempt
-def pipelines(request):
-    """
-    Return all DataSentinel pipelines as JSON.
-    """
 
-    if request.method != "GET":
-        return JsonResponse(
-            {
-                "error": "Only GET requests are allowed."
-            },
-            status=405,
-        )
+@require_GET
+@login_required
+def pipelines(request):
+    pipelines_queryset = _pipeline_queryset(
+        request
+    )
 
     pipelines_data = []
 
-    pipelines_queryset = (
-        Pipeline.objects
-        .select_related("dataset")
-        .order_by("name")
-    )
-
     for pipeline in pipelines_queryset:
-
-        runs = pipeline.runs.all()
-
-        run_count = runs.count()
-
-        latest_run = runs.first()
-
-        quality_scores = [
-            float(run.quality_score)
-            for run in runs
-            if run.quality_score is not None
-        ]
-
-        average_quality = (
-            round(
-                sum(quality_scores) / len(quality_scores),
-                2,
-            )
-            if quality_scores
-            else None
+        latest_run = (
+            pipeline.runs
+            .order_by("-started_at")
+            .first()
         )
 
         pipelines_data.append(
@@ -423,8 +1410,17 @@ def pipelines(request):
                     "id": pipeline.dataset.id,
                     "name": pipeline.dataset.name,
                 },
-                "run_count": run_count,
-                "quality_score": average_quality,
+                "run_count": pipeline.run_count,
+                "quality_score": (
+                    round(
+                        float(
+                            pipeline.average_quality
+                        ),
+                        2,
+                    )
+                    if pipeline.average_quality is not None
+                    else None
+                ),
                 "last_run_at": (
                     latest_run.started_at
                     if latest_run
@@ -441,28 +1437,32 @@ def pipelines(request):
     )
 
 
+@login_required
 def pipeline_runs_page(request):
-    """
-    Render the pipeline runs management page.
-    """
+    runs = _run_queryset(request)
 
     return render(
         request,
         "pipeline_runs.html",
+        {
+            "runs": runs,
+        },
     )
 
 
-def pipeline_run_detail_page(request, run_id):
-    """
-    Render the detailed pipeline run page.
-    """
-
+@login_required
+def pipeline_run_detail_page(
+    request,
+    run_id,
+):
     pipeline_run = get_object_or_404(
         PipelineRun.objects.select_related(
             "pipeline",
             "pipeline__dataset",
         ),
         id=run_id,
+        pipeline__dataset__owner=request.user,
+        pipeline__dataset__is_active=True,
     )
 
     results = (
@@ -491,164 +1491,125 @@ def pipeline_run_detail_page(request, run_id):
             "passed_checks": passed_checks,
             "failed_checks": failed_checks,
             "total_checks": total_checks,
-            "quality_score": pipeline_run.quality_score,
+            "quality_score": (
+                pipeline_run.quality_score
+            ),
         },
     )
-@csrf_exempt
-def update_issue(request, issue_id):
-    """
-    Update the status of a data-quality issue.
-    """
 
-    if request.method != "PATCH":
-        return JsonResponse(
-            {
-                "error": "Only PATCH requests are allowed."
-            },
-            status=405,
+
+@require_POST
+@login_required
+def update_issue(
+    request,
+    issue_id,
+):
+    issue = get_object_or_404(
+        QualityIssue.objects.select_related(
+            "quality_result__pipeline_run__pipeline__dataset"
+        ),
+        id=issue_id,
+        quality_result__pipeline_run__pipeline__dataset__owner=request.user,
+        quality_result__pipeline_run__pipeline__dataset__is_active=True,
+    )
+
+    if issue.status == QualityIssue.Status.RESOLVED:
+        messages.info(
+            request,
+            "This issue is already resolved.",
         )
 
-    from core.models import QualityIssue
-
-    try:
-        issue = QualityIssue.objects.get(id=issue_id)
-    except QualityIssue.DoesNotExist:
-        return JsonResponse(
-            {
-                "error": "Issue not found."
-            },
-            status=404,
+        return redirect(
+            "issues_page"
         )
 
-    try:
-        body = json.loads(request.body)
-    except json.JSONDecodeError:
-        return JsonResponse(
-            {
-                "error": "Invalid JSON."
-            },
-            status=400,
-        )
+    issue.status = QualityIssue.Status.RESOLVED
+    issue.resolved_at = timezone.now()
 
-    new_status = body.get("status")
+    issue.save(
+        update_fields=[
+            "status",
+            "resolved_at",
+        ]
+    )
 
-    allowed_statuses = [
-        "OPEN",
-        "ACKNOWLEDGED",
-        "RESOLVED",
-    ]
+    messages.success(
+        request,
+        "Issue resolved successfully.",
+    )
 
-    if new_status not in allowed_statuses:
-        return JsonResponse(
-            {
-                "error": "Invalid status.",
-                "allowed_statuses": allowed_statuses,
-            },
-            status=400,
-        )
-
-    issue.status = new_status
-    issue.save(update_fields=["status"])
-
-    return JsonResponse(
-        {
-            "message": "Issue updated successfully.",
-            "issue": {
-                "id": issue.id,
-                "title": issue.title,
-                "severity": issue.severity,
-                "status": issue.status,
-            },
-        }
+    return redirect(
+        "issues_page"
     )
 
 
+@require_GET
+@login_required
 def dashboard(request):
-    """
-    Return dashboard overview and analytics.
-    """
-
-    if request.method != "GET":
-        return JsonResponse(
-            {
-                "error": "Only GET requests are allowed."
-            },
-            status=405,
-        )
-
-    runs = (
-        PipelineRun.objects
-        .select_related(
-            "pipeline",
-            "pipeline__dataset",
-        )
-        .prefetch_related(
-            "quality_results__issues"
-        )
-        .order_by("-started_at")
-    )
+    runs = _run_queryset(request)
 
     total_runs = runs.count()
 
     successful_runs = runs.filter(
-        status="SUCCESS"
+        status=PipelineRun.Status.SUCCESS
     ).count()
 
     failed_runs = runs.filter(
-        status="FAILED"
+        status=PipelineRun.Status.FAILED
     ).count()
 
-    quality_scores = [
-        float(score)
-        for score in runs.values_list(
-            "quality_score",
-            flat=True,
-        )
-        if score is not None
-    ]
-
     average_quality_score = (
-        round(
-            sum(quality_scores) / len(quality_scores),
-            2,
+        runs.filter(
+            quality_score__isnull=False
         )
-        if quality_scores
-        else None
+        .aggregate(
+            value=Avg("quality_score")
+        )["value"]
     )
 
-    total_checks = 0
-    passed_checks = 0
-    failed_checks = 0
-    open_issues = 0
+    if average_quality_score is not None:
+        average_quality_score = round(
+            float(average_quality_score),
+            2,
+        )
+
+    results_queryset = QualityResult.objects.filter(
+        pipeline_run__pipeline__dataset__owner=request.user,
+        pipeline_run__pipeline__dataset__is_active=True,
+    )
+
+    total_checks = results_queryset.count()
+
+    passed_checks = results_queryset.filter(
+        passed=True
+    ).count()
+
+    failed_checks = results_queryset.filter(
+        passed=False
+    ).count()
+
+    open_issues_queryset = QualityIssue.objects.filter(
+        quality_result__pipeline_run__pipeline__dataset__owner=request.user,
+        quality_result__pipeline_run__pipeline__dataset__is_active=True,
+        status=QualityIssue.Status.OPEN,
+    )
+
+    open_issues = open_issues_queryset.count()
 
     issue_severity = {
-        "CRITICAL": 0,
-        "HIGH": 0,
-        "MEDIUM": 0,
-        "LOW": 0,
+        "CRITICAL": open_issues_queryset.filter(
+            severity=QualityIssue.Severity.CRITICAL
+        ).count(),
+        "HIGH": open_issues_queryset.filter(
+            severity=QualityIssue.Severity.HIGH
+        ).count(),
+        "MEDIUM": open_issues_queryset.filter(
+            severity=QualityIssue.Severity.MEDIUM
+        ).count(),
+        "LOW": open_issues_queryset.filter(
+            severity=QualityIssue.Severity.LOW
+        ).count(),
     }
-
-    for run in runs:
-        for result in run.quality_results.all():
-
-            total_checks += 1
-
-            if result.passed:
-                passed_checks += 1
-            else:
-                failed_checks += 1
-
-            for issue in result.issues.all():
-
-                if issue.status == "OPEN":
-                    open_issues += 1
-
-                    severity = str(
-                        issue.severity
-                    ).upper()
-
-                    if severity in issue_severity:
-                        issue_severity[severity] += 1
 
     latest_run = None
 
@@ -660,7 +1621,9 @@ def dashboard(request):
             "pipeline": run.pipeline.name,
             "dataset": run.pipeline.dataset.name,
             "status": run.status,
-            "rows_processed": run.rows_processed,
+            "rows_processed": (
+                run.rows_processed
+            ),
             "quality_score": (
                 float(run.quality_score)
                 if run.quality_score is not None
@@ -670,38 +1633,37 @@ def dashboard(request):
             "completed_at": run.completed_at,
         }
 
-    recent_runs = []
-
-    for run in runs[:10]:
-
-        recent_runs.append(
-            {
-                "id": run.id,
-                "pipeline": run.pipeline.name,
-                "dataset": run.pipeline.dataset.name,
-                "status": run.status,
-                "rows_processed": run.rows_processed,
-                "quality_score": (
-                    float(run.quality_score)
-                    if run.quality_score is not None
-                    else None
-                ),
-                "started_at": run.started_at,
-                "completed_at": run.completed_at,
-            }
-        )
+    recent_runs = [
+        {
+            "id": run.id,
+            "pipeline": run.pipeline.name,
+            "dataset": run.pipeline.dataset.name,
+            "status": run.status,
+            "rows_processed": (
+                run.rows_processed
+            ),
+            "quality_score": (
+                float(run.quality_score)
+                if run.quality_score is not None
+                else None
+            ),
+            "started_at": run.started_at,
+            "completed_at": run.completed_at,
+        }
+        for run in runs[:10]
+    ]
 
     return JsonResponse(
         {
             "service": "DataSentinel",
-
             "overview": {
                 "total_runs": total_runs,
                 "successful_runs": successful_runs,
                 "failed_runs": failed_runs,
-                "average_quality_score": average_quality_score,
+                "average_quality_score": (
+                    average_quality_score
+                ),
             },
-
             "quality": {
                 "total_checks": total_checks,
                 "passed_checks": passed_checks,
@@ -709,94 +1671,60 @@ def dashboard(request):
                 "open_issues": open_issues,
                 "issue_severity": issue_severity,
             },
-
             "latest_run": latest_run,
-
             "recent_runs": recent_runs,
         }
     )
 
- 
-def issues(request):
-    """
-    Return all data-quality issues.
-    """
 
-    if request.method != "GET":
-        return JsonResponse(
-            {
-                "error": "Only GET requests are allowed."
-            },
-            status=405,
-        )
+@require_GET
+@login_required
+def issues(request):
+    issues_queryset = _issue_queryset(
+        request
+    )
 
     issues_data = []
 
-    runs = (
-        PipelineRun.objects
-        .select_related(
-            "pipeline",
-            "pipeline__dataset",
+    for issue in issues_queryset:
+        quality_result = issue.quality_result
+        run = quality_result.pipeline_run
+        pipeline = run.pipeline
+        dataset = pipeline.dataset
+        quality_check = quality_result.quality_check
+
+        issues_data.append(
+            {
+                "id": issue.id,
+                "run_id": run.id,
+                "pipeline": {
+                    "id": pipeline.id,
+                    "name": pipeline.name,
+                },
+                "dataset": {
+                    "id": dataset.id,
+                    "name": dataset.name,
+                },
+                "check": {
+                    "id": quality_result.id,
+                    "name": quality_check.name,
+                    "type": quality_check.check_type,
+                    "column": (
+                        quality_check.column_name
+                    ),
+                },
+                "title": issue.title,
+                "description": issue.description,
+                "severity": issue.severity,
+                "status": issue.status,
+                "ai_analysis": issue.ai_analysis,
+                "ai_recommendation": (
+                    issue.ai_recommendation
+                ),
+                "created_at": issue.created_at,
+                "resolved_at": issue.resolved_at,
+            }
         )
-        .prefetch_related(
-            "quality_results__issues",
-            "quality_results__quality_check",
-        )
-        .order_by("-started_at")
-    )
-
-    for run in runs:
-
-        for quality_result in run.quality_results.all():
-
-            for issue in quality_result.issues.all():
-
-                issues_data.append(
-                    {
-                        "id": issue.id,
-
-                        "run_id": run.id,
-
-                        "pipeline": {
-                            "id": run.pipeline.id,
-                            "name": run.pipeline.name,
-                        },
-
-                        "dataset": {
-                            "id": run.pipeline.dataset.id,
-                            "name": run.pipeline.dataset.name,
-                        },
-
-                        "check": {
-                            "id": quality_result.id,
-                            "name": (
-                                quality_result
-                                .quality_check
-                                .name
-                            ),
-                            "type": (
-                                quality_result
-                                .quality_check
-                                .check_type
-                            ),
-                            "column": (
-                                quality_result
-                                .quality_check
-                                .column_name
-                            ),
-                        },
-
-                        "title": issue.title,
-                        "description": issue.description,
-                        "severity": issue.severity,
-                        "status": issue.status,
-                        "ai_analysis": issue.ai_analysis,
-                        "ai_recommendation": (
-                            issue.ai_recommendation
-                        ),
-                        "created_at": issue.created_at,
-                    }
-                )
 
     return JsonResponse(
         {
@@ -806,30 +1734,17 @@ def issues(request):
     )
 
 
-def issue_detail(request, issue_id):
-    """
-    Return detailed information for one issue.
-    """
-
-    if request.method != "GET":
-        return JsonResponse(
-            {
-                "error": "Only GET requests are allowed."
-            },
-            status=405,
-        )
-
-    from core.models import QualityIssue
-
+@require_GET
+@login_required
+def issue_detail(
+    request,
+    issue_id,
+):
     try:
-        issue = (
-            QualityIssue.objects
-            .select_related(
-                "quality_result",
-                "quality_result__pipeline_run",
-                "quality_result__quality_check",
-            )
-            .get(id=issue_id)
+        issue = _issue_queryset(
+            request
+        ).get(
+            id=issue_id
         )
 
     except QualityIssue.DoesNotExist:
@@ -852,9 +1767,11 @@ def issue_detail(request, issue_id):
             "severity": issue.severity,
             "status": issue.status,
             "ai_analysis": issue.ai_analysis,
-            "ai_recommendation": issue.ai_recommendation,
+            "ai_recommendation": (
+                issue.ai_recommendation
+            ),
             "created_at": issue.created_at,
-
+            "resolved_at": issue.resolved_at,
             "run": {
                 "id": run.id,
                 "status": run.status,
@@ -864,16 +1781,23 @@ def issue_detail(request, issue_id):
                     else None
                 ),
             },
-
             "check": {
                 "id": quality_result.id,
                 "name": quality_check.name,
                 "type": quality_check.check_type,
-                "column": quality_check.column_name,
+                "column": (
+                    quality_check.column_name
+                ),
                 "passed": quality_result.passed,
-                "rows_checked": quality_result.rows_checked,
-                "rows_passed": quality_result.rows_passed,
-                "rows_failed": quality_result.rows_failed,
+                "rows_checked": (
+                    quality_result.rows_checked
+                ),
+                "rows_passed": (
+                    quality_result.rows_passed
+                ),
+                "rows_failed": (
+                    quality_result.rows_failed
+                ),
                 "pass_rate": float(
                     quality_result.pass_rate
                 ),
@@ -883,87 +1807,13 @@ def issue_detail(request, issue_id):
     )
 
 
-
-@csrf_exempt
-def update_issue(request, issue_id):
-    """
-    Update the status of a data-quality issue.
-    """
-
-    if request.method != "PATCH":
-        return JsonResponse(
-            {
-                "error": "Only PATCH requests are allowed."
-            },
-            status=405,
-        )
-
-    try:
-        issue = QualityIssue.objects.get(id=issue_id)
-
-    except QualityIssue.DoesNotExist:
-        return JsonResponse(
-            {
-                "error": "Issue not found."
-            },
-            status=404,
-        )
-
-    try:
-        data = json.loads(request.body or "{}")
-
-    except json.JSONDecodeError:
-        return JsonResponse(
-            {
-                "error": "Invalid JSON request body."
-            },
-            status=400,
-        )
-
-    status_value = data.get("status")
-
-    if not status_value:
-        return JsonResponse(
-            {
-                "error": "Status is required."
-            },
-            status=400,
-        )
-
-    allowed_statuses = [
-        "OPEN",
-        "IN_PROGRESS",
-        "RESOLVED",
-    ]
-
-    if status_value not in allowed_statuses:
-        return JsonResponse(
-            {
-                "error": "Invalid status.",
-                "allowed_statuses": allowed_statuses,
-            },
-            status=400,
-        )
-
-    issue.status = status_value
-    issue.save(update_fields=["status"])
-
-    return JsonResponse(
-        {
-            "success": True,
-            "message": "Issue status updated successfully.",
-            "issue": {
-                "id": issue.id,
-                "title": issue.title,
-                "severity": issue.severity,
-                "status": issue.status,
-            },
-        }
-    )
+@login_required
 def pipeline_detail_page(request, pipeline_id):
     pipeline = get_object_or_404(
         Pipeline.objects.select_related("dataset"),
         id=pipeline_id,
+        dataset__owner=request.user,
+        dataset__is_active=True,
     )
 
     runs = (
@@ -980,22 +1830,28 @@ def pipeline_detail_page(request, pipeline_id):
         .prefetch_related("issues")
         .order_by("id")
         if latest_run
-        else []
+        else QualityResult.objects.none()
+    )
+
+    quality_checks = (
+        pipeline.dataset.quality_checks
+        .filter(is_active=True)
+        .order_by("id")
     )
 
     total_runs = runs.count()
 
-    quality_scores = [
-        float(run.quality_score)
-        for run in runs
-        if run.quality_score is not None
-    ]
-
     average_quality = (
-        round(sum(quality_scores) / len(quality_scores), 2)
-        if quality_scores
-        else None
+        runs
+        .filter(quality_score__isnull=False)
+        .aggregate(value=Avg("quality_score"))["value"]
     )
+
+    if average_quality is not None:
+        average_quality = round(
+            float(average_quality),
+            2,
+        )
 
     passed_checks = (
         latest_results.filter(passed=True).count()
@@ -1017,6 +1873,7 @@ def pipeline_detail_page(request, pipeline_id):
             "runs": runs,
             "latest_run": latest_run,
             "latest_results": latest_results,
+            "quality_checks": quality_checks,
             "total_runs": total_runs,
             "average_quality": average_quality,
             "passed_checks": passed_checks,
@@ -1024,19 +1881,12 @@ def pipeline_detail_page(request, pipeline_id):
         },
     )
 
-def pipeline_detail(request, pipeline_id):
-    """
-    Return details for a single pipeline.
-    """
-
-    if request.method != "GET":
-        return JsonResponse(
-            {
-                "error": "Only GET requests are allowed."
-            },
-            status=405,
-        )
-
+@require_GET
+@login_required
+def pipeline_detail(
+    request,
+    pipeline_id,
+):
     try:
         pipeline = (
             Pipeline.objects
@@ -1044,67 +1894,12 @@ def pipeline_detail(request, pipeline_id):
                 "dataset",
                 "dataset__data_source",
             )
-            .get(id=pipeline_id)
+            .get(
+                id=pipeline_id,
+                dataset__owner=request.user,
+                dataset__is_active=True,
+            )
         )
-
-        runs = (
-            PipelineRun.objects
-            .filter(pipeline=pipeline)
-            .order_by("-started_at")
-        )
-
-        quality_checks = (
-            pipeline.dataset.quality_checks
-            .filter(is_active=True)
-            .order_by("id")
-        )
-
-        return JsonResponse(
-            {
-                "id": pipeline.id,
-                "name": pipeline.name,
-                "description": pipeline.description,
-                "status": pipeline.status,
-
-                "dataset": {
-                    "id": pipeline.dataset.id,
-                    "name": pipeline.dataset.name,
-                    "row_count": pipeline.dataset.row_count,
-                    "column_count": pipeline.dataset.column_count,
-                },
-
-                "run_count": runs.count(),
-
-                "quality_checks": [
-                    {
-                        "id": check.id,
-                        "name": check.name,
-                        "check_type": check.check_type,
-                        "column_name": check.column_name,
-                        "configuration": check.configuration,
-                        "is_active": check.is_active,
-                    }
-                    for check in quality_checks
-                ],
-
-                "runs": [
-                    {
-                        "id": run.id,
-                        "status": run.status,
-                        "rows_processed": run.rows_processed,
-                        "quality_score": (
-                            float(run.quality_score)
-                            if run.quality_score is not None
-                            else None
-                        ),
-                        "started_at": run.started_at,
-                        "completed_at": run.completed_at,
-                    }
-                    for run in runs[:10]
-                ],
-            }
-        )
-
     except Pipeline.DoesNotExist:
         return JsonResponse(
             {
@@ -1112,505 +1907,137 @@ def pipeline_detail(request, pipeline_id):
             },
             status=404,
         )
-def datasets_page(request):
-    if request.method == "POST":
-        name = request.POST.get("name", "").strip()
-        description = request.POST.get("description", "").strip()
-        uploaded_file = request.FILES.get("file")
 
-        if not name:
-            messages.error(request, "Dataset name is required.")
-            return redirect("datasets_page")
-
-        if not uploaded_file:
-            messages.error(request, "CSV file is required.")
-            return redirect("datasets_page")
-
-        if not uploaded_file.name.lower().endswith(".csv"):
-            messages.error(request, "Only CSV files are supported.")
-            return redirect("datasets_page")
-
-        try:
-            dataframe = pd.read_csv(uploaded_file)
-        except Exception as exc:
-            messages.error(
-                request,
-                f"Unable to read CSV file: {exc}",
-            )
-            return redirect("datasets_page")
-
-        if dataframe.empty:
-            messages.error(
-                request,
-                "The uploaded CSV file contains no rows.",
-            )
-            return redirect("datasets_page")
-
-        if len(dataframe.columns) == 0:
-            messages.error(
-                request,
-                "The uploaded CSV file contains no columns.",
-            )
-            return redirect("datasets_page")
-
-        if request.user.is_authenticated:
-            owner = request.user
-        else:
-            owner, _ = User.objects.get_or_create(
-                username="datasentinel",
-                defaults={
-                    "email": "system@datasentinel.local",
-                    "is_active": True,
-                },
-            )
-
-        data_source = DataSource.objects.create(
-            name=f"{name} CSV Source",
-            source_type=DataSource.SourceType.CSV,
-            description=f"CSV source for dataset '{name}'.",
-            connection_config={
-                "filename": uploaded_file.name,
-            },
+    runs = (
+        PipelineRun.objects
+        .filter(
+            pipeline=pipeline
         )
-
-        upload_directory = os.path.join(
-            settings.MEDIA_ROOT,
-            "datasets",
-        )
-
-        os.makedirs(upload_directory, exist_ok=True)
-
-        safe_name = (
-            name.lower()
-            .replace(" ", "_")
-            .replace("/", "_")
-            .replace("\\", "_")
-        )
-
-        safe_filename = f"{owner.id}_{safe_name}.csv"
-
-        file_path = os.path.join(
-            upload_directory,
-            safe_filename,
-        )
-
-        with open(file_path, "wb+") as destination:
-            for chunk in uploaded_file.chunks():
-                destination.write(chunk)
-
-        schema_snapshot = {
-            "columns": [
-                {
-                    "name": column,
-                    "dtype": str(dataframe[column].dtype),
-                    "null_count": int(
-                        dataframe[column].isna().sum()
-                    ),
-                    "null_percentage": round(
-                        float(
-                            dataframe[column].isna().mean() * 100
-                        ),
-                        2,
-                    ),
-                    "unique_count": int(
-                        dataframe[column].nunique(
-                            dropna=True
-                        )
-                    ),
-                }
-                for column in dataframe.columns
-            ]
-        }
-
-        Dataset.objects.create(
-            name=name,
-            description=description,
-            owner=owner,
-            data_source=data_source,
-            file_path=file_path,
-            row_count=len(dataframe),
-            column_count=len(dataframe.columns),
-            schema_snapshot=schema_snapshot,
-        )
-
-        messages.success(
-            request,
-            f'Dataset "{name}" uploaded successfully.',
-        )
-
-        return redirect("datasets_page")
-
-    datasets = (
-        Dataset.objects
-        .select_related("data_source", "owner")
-        .filter(is_active=True)
-        .order_by("-updated_at")
+        .order_by("-started_at")
     )
 
-    total_datasets = datasets.count()
-
-    total_pipelines = Pipeline.objects.filter(
-        dataset__is_active=True
-    ).count()
-
-    total_checks = QualityCheck.objects.filter(
-        dataset__is_active=True,
-        is_active=True,
-    ).count()
-
-    quality_scores = list(
-        PipelineRun.objects.filter(
-            pipeline__dataset__is_active=True,
-            quality_score__isnull=False,
-        ).values_list(
-            "quality_score",
-            flat=True,
+    quality_checks = (
+        pipeline.dataset.quality_checks
+        .filter(
+            is_active=True
         )
+        .order_by("id")
     )
-
-    average_quality = None
-
-    if quality_scores:
-        average_quality = round(
-            sum(float(score) for score in quality_scores)
-            / len(quality_scores),
-            1,
-        )
-
-    for dataset in datasets:
-        dataset.pipeline_count = dataset.pipelines.count()
-
-        dataset.quality_check_count = (
-            dataset.quality_checks
-            .filter(is_active=True)
-            .count()
-        )
-
-    context = {
-        "datasets": datasets,
-        "total_datasets": total_datasets,
-        "total_pipelines": total_pipelines,
-        "total_checks": total_checks,
-        "average_quality": average_quality,
-    }
-
-    return render(
-        request,
-        "datasets.html",
-        context,
-    )
-@csrf_exempt
-def datasets(request):
-    """
-    List datasets or create a new CSV dataset.
-    """
-
-    # GET - LIST DATASETS
-    
-
-    if request.method == "GET":
-
-        datasets_data = []
-
-        queryset = (
-            Dataset.objects
-            .select_related("data_source", "owner")
-            .filter(is_active=True)
-            .order_by("-updated_at")
-        )
-
-        for dataset in queryset:
-
-            datasets_data.append(
-                {
-                    "id": dataset.id,
-                    "name": dataset.name,
-                    "description": dataset.description,
-
-                    "source_type": (
-                        dataset.data_source.source_type
-                        if dataset.data_source
-                        else None
-                    ),
-
-                    "row_count": dataset.row_count,
-                    "column_count": dataset.column_count,
-                    "is_active": dataset.is_active,
-
-                    "created_at": dataset.created_at,
-                    "updated_at": dataset.updated_at,
-
-                    "pipeline_count": dataset.pipelines.count(),
-
-                    "quality_check_count": (
-                        dataset.quality_checks
-                        .filter(is_active=True)
-                        .count()
-                    ),
-                }
-            )
-
-        return JsonResponse(
-            {
-                "count": len(datasets_data),
-                "datasets": datasets_data,
-            }
-        )
-
-    
-    # ONLY GET AND POST ARE ALLOWED
-
-    if request.method != "POST":
-
-        return JsonResponse(
-            {
-                "error": "Only GET and POST requests are allowed."
-            },
-            status=405,
-        )
-
-    # GET FORM DATA
-    
-
-    name = request.POST.get("name", "").strip()
-
-    description = request.POST.get(
-        "description",
-        ""
-    ).strip()
-
-    uploaded_file = request.FILES.get("file")
-
-    # VALIDATION
-
-    if not name:
-
-        return JsonResponse(
-            {
-                "error": "Dataset name is required."
-            },
-            status=400,
-        )
-
-    if not uploaded_file:
-
-        return JsonResponse(
-            {
-                "error": "CSV file is required."
-            },
-            status=400,
-        )
-
-    if not uploaded_file.name.lower().endswith(".csv"):
-
-        return JsonResponse(
-            {
-                "error": "Only CSV files are supported."
-            },
-            status=400,
-        )
-
-    # 
-    # READ CSV
-
-    try:
-
-        dataframe = pd.read_csv(uploaded_file)
-
-    except Exception as exc:
-
-        return JsonResponse(
-            {
-                "error": f"Unable to read CSV file: {exc}"
-            },
-            status=400,
-        )
-
-    if dataframe.empty:
-
-        return JsonResponse(
-            {
-                "error": "The uploaded CSV file contains no rows."
-            },
-            status=400,
-        )
-
-    if len(dataframe.columns) == 0:
-
-        return JsonResponse(
-            {
-                "error": "The uploaded CSV file contains no columns."
-            },
-            status=400,
-        )
-
-    # DETERMINE OWNER
-
-    if request.user.is_authenticated:
-
-        owner = request.user
-
-    else:
-
-        owner, _ = User.objects.get_or_create(
-            username="datasentinel",
-            defaults={
-                "email": "system@datasentinel.local",
-                "is_active": True,
-            },
-        )
-
-    # CREATE DATA SOURCE
-
-    data_source = DataSource.objects.create(
-        name=f"{name} CSV Source",
-
-        source_type=DataSource.SourceType.CSV,
-
-        description=f"CSV source for dataset '{name}'.",
-
-        connection_config={
-            "filename": uploaded_file.name,
-        },
-    )
-
-    # SAVE CSV FILE
-
-    upload_directory = os.path.join(
-        settings.MEDIA_ROOT,
-        "datasets",
-    )
-
-    os.makedirs(
-        upload_directory,
-        exist_ok=True,
-    )
-
-    safe_filename = (
-        f"{owner.id}_{name}"
-        .lower()
-        .replace(" ", "_")
-        .replace("/", "_")
-        .replace("\\", "_")
-        + ".csv"
-    )
-
-    file_path = os.path.join(
-        upload_directory,
-        safe_filename,
-    )
-
-    with open(file_path, "wb+") as destination:
-
-        for chunk in uploaded_file.chunks():
-
-            destination.write(chunk)
-
-    # DETECT SCHEMA
-
-    schema_snapshot = {
-        "columns": [
-
-            {
-                "name": column,
-
-                "dtype": str(
-                    dataframe[column].dtype
-                ),
-
-                "null_count": int(
-                    dataframe[column].isna().sum()
-                ),
-
-                "null_percentage": round(
-                    float(
-                        dataframe[column]
-                        .isna()
-                        .mean()
-                        * 100
-                    ),
-                    2,
-                ),
-
-                "unique_count": int(
-                    dataframe[column].nunique(
-                        dropna=True
-                    )
-                ),
-            }
-
-            for column in dataframe.columns
-        ]
-    }
-
-    # CREATE DATASET
-
-    dataset = Dataset.objects.create(
-
-        name=name,
-
-        # IMPORTANT:
-        # This was "desscription" in your code.
-        description=description,
-
-        owner=owner,
-
-        data_source=data_source,
-
-        file_path=file_path,
-
-        row_count=len(dataframe),
-
-        column_count=len(dataframe.columns),
-
-        schema_snapshot=schema_snapshot,
-    )
-
-    # RESPONSE
 
     return JsonResponse(
         {
-            "message": "Dataset uploaded successfully.",
-
+            "id": pipeline.id,
+            "name": pipeline.name,
+            "description": pipeline.description,
+            "status": pipeline.status,
+            "schedule": pipeline.schedule,
             "dataset": {
-
-                "id": dataset.id,
-
-                "name": dataset.name,
-
-                "description": dataset.description,
-
-                "source_type": data_source.source_type,
-
-                "row_count": dataset.row_count,
-
-                "column_count": dataset.column_count,
-
-                "created_at": dataset.created_at,
+                "id": pipeline.dataset.id,
+                "name": pipeline.dataset.name,
+                "row_count": (
+                    pipeline.dataset.row_count
+                ),
+                "column_count": (
+                    pipeline.dataset.column_count
+                ),
             },
-        },
-        status=201,
+            "run_count": runs.count(),
+            "quality_checks": [
+                {
+                    "id": check.id,
+                    "name": check.name,
+                    "check_type": (
+                        check.check_type
+                    ),
+                    "column_name": (
+                        check.column_name
+                    ),
+                    "configuration": (
+                        check.configuration
+                    ),
+                    "is_active": (
+                        check.is_active
+                    ),
+                }
+                for check in quality_checks
+            ],
+            "runs": [
+                {
+                    "id": run.id,
+                    "status": run.status,
+                    "rows_processed": (
+                        run.rows_processed
+                    ),
+                    "quality_score": (
+                        float(
+                            run.quality_score
+                        )
+                        if run.quality_score is not None
+                        else None
+                    ),
+                    "reliability_score": (
+                        float(
+                            run.reliability_score
+                        )
+                        if run.reliability_score is not None
+                        else None
+                    ),
+                    "reliability_grade": (
+                        run.reliability_grade
+                    ),
+                    "reliability_status": (
+                        run.reliability_status
+                    ),
+                    "started_at": run.started_at,
+                    "completed_at": (
+                        run.completed_at
+                    ),
+                }
+                for run in runs[:10]
+            ],
+        }
+    )
+@require_GET
+@login_required
+def datasets(request):
+    queryset = _dataset_queryset(request)
+
+    datasets_data = [
+        {
+            "id": dataset.id,
+            "name": dataset.name,
+            "description": dataset.description,
+            "source_type": (
+                dataset.data_source.source_type
+                if dataset.data_source
+                else None
+            ),
+            "file_format": dataset.file_format,
+            "row_count": dataset.row_count,
+            "column_count": dataset.column_count,
+            "is_active": dataset.is_active,
+            "created_at": dataset.created_at,
+            "updated_at": dataset.updated_at,
+            "pipeline_count": dataset.pipeline_count,
+            "quality_check_count": dataset.quality_check_count,
+        }
+        for dataset in queryset
+    ]
+
+    return JsonResponse(
+        {
+            "count": len(datasets_data),
+            "datasets": datasets_data,
+        }
     )
 
-
-# DATASET DETAIL API
-
-def dataset_detail(request, dataset_id):
-    """
-    Return detailed information about one dataset as JSON.
-    """
-
-    if request.method != "GET":
-
-        return JsonResponse(
-            {
-                "error": "Only GET requests are allowed."
-            },
-            status=405,
-        )
-
+@require_GET
+@login_required
+def dataset_detail(
+    request,
+    dataset_id,
+):
     try:
-
         dataset = (
             Dataset.objects
             .select_related(
@@ -1619,12 +2046,12 @@ def dataset_detail(request, dataset_id):
             )
             .get(
                 id=dataset_id,
+                owner=request.user,
                 is_active=True,
             )
         )
 
     except Dataset.DoesNotExist:
-
         return JsonResponse(
             {
                 "error": "Dataset not found."
@@ -1632,117 +2059,107 @@ def dataset_detail(request, dataset_id):
             status=404,
         )
 
-    # QUALITY CHECKS
-
     quality_checks = (
         dataset.quality_checks
         .filter(is_active=True)
         .order_by("id")
     )
 
-    # PIPELINES
-
     pipelines = (
         dataset.pipelines
         .order_by("-updated_at")
     )
 
-    
-    # RESPONSE
-
     return JsonResponse(
         {
             "id": dataset.id,
-
             "name": dataset.name,
-
             "description": dataset.description,
-
-            # Do not expose this to users in a production UI.
-            "file_path": dataset.file_path,
-
             "row_count": dataset.row_count,
-
             "column_count": dataset.column_count,
-
-            "schema_snapshot": dataset.schema_snapshot,
-
+            "schema_snapshot": (
+                dataset.schema_snapshot
+            ),
             "is_active": dataset.is_active,
-
             "created_at": dataset.created_at,
-
             "updated_at": dataset.updated_at,
-
             "data_source": (
-
                 {
                     "id": dataset.data_source.id,
-
                     "name": dataset.data_source.name,
-
-                    "type": dataset.data_source.source_type,
-
-                    "is_active": dataset.data_source.is_active,
+                    "type": (
+                        dataset.data_source.source_type
+                    ),
+                    "is_active": (
+                        dataset.data_source.is_active
+                    ),
                 }
-
                 if dataset.data_source
-
                 else None
             ),
-
             "quality_checks": [
-
                 {
                     "id": check.id,
-
                     "name": check.name,
-
-                    "check_type": check.check_type,
-
-                    "column_name": check.column_name,
-
-                    "configuration": check.configuration,
-
-                    "is_active": check.is_active,
+                    "check_type": (
+                        check.check_type
+                    ),
+                    "column_name": (
+                        check.column_name
+                    ),
+                    "configuration": (
+                        check.configuration
+                    ),
+                    "is_active": (
+                        check.is_active
+                    ),
                 }
-
                 for check in quality_checks
             ],
-
             "pipelines": [
-
                 {
                     "id": pipeline.id,
-
                     "name": pipeline.name,
-
-                    "description": pipeline.description,
-
+                    "description": (
+                        pipeline.description
+                    ),
                     "status": pipeline.status,
-
-                    "schedule": pipeline.schedule,
-
-                    "updated_at": pipeline.updated_at,
+                    "schedule": (
+                        pipeline.schedule
+                    ),
+                    "updated_at": (
+                        pipeline.updated_at
+                    ),
                 }
-
                 for pipeline in pipelines
             ],
-
             "pipeline_count": pipelines.count(),
-
-            "quality_check_count": quality_checks.count(),
+            "quality_check_count": (
+                quality_checks.count()
+            ),
         }
     )
 
 
-# DATASET DETAIL PAGE
-def dataset_detail_page(request, dataset_id):
+@login_required
+def datasets_page_redirect(request):
+    return redirect(
+        "datasets_page"
+    )
+
+
+@login_required
+def dataset_detail_page(
+    request,
+    dataset_id,
+):
     dataset = get_object_or_404(
         Dataset.objects.select_related(
             "data_source",
             "owner",
         ),
         id=dataset_id,
+        owner=request.user,
         is_active=True,
     )
 
@@ -1760,36 +2177,45 @@ def dataset_detail_page(request, dataset_id):
     schema_columns = []
 
     if dataset.schema_snapshot:
-        schema_columns = dataset.schema_snapshot.get("columns", [])
-
-    context = {
-        "dataset": dataset,
-        "quality_checks": quality_checks,
-        "pipelines": pipelines,
-        "schema_columns": schema_columns,
-    }
+        schema_columns = (
+            dataset.schema_snapshot.get(
+                "columns",
+                [],
+            )
+        )
 
     return render(
         request,
         "dataset_detail.html",
-        context,
+        {
+            "dataset": dataset,
+            "quality_checks": quality_checks,
+            "pipelines": pipelines,
+            "schema_columns": schema_columns,
+        },
     )
 
-# QUALITY CHECKS PAGE
 
-def quality_checks_page(request, dataset_id):
-
+@login_required
+def quality_checks_page(
+    request,
+    dataset_id,
+):
     dataset = get_object_or_404(
         Dataset,
         id=dataset_id,
+        owner=request.user,
+        is_active=True,
     )
 
     quality_checks = (
-        dataset.quality_checks.all()
+        dataset.quality_checks
+        .filter(is_active=True)
+        .order_by("id")
     )
 
     form = QualityCheckForm(
-        dataset=dataset,
+        dataset=dataset
     )
 
     return render(
@@ -1797,29 +2223,24 @@ def quality_checks_page(request, dataset_id):
         "quality_checks.html",
         {
             "dataset": dataset,
-
             "quality_checks": quality_checks,
-
             "form": form,
         },
     )
 
 
-# CREATE QUALITY CHECK
-
-def create_quality_check(request, dataset_id):
-
+@require_POST
+@login_required
+def create_quality_check(
+    request,
+    dataset_id,
+):
     dataset = get_object_or_404(
         Dataset,
         id=dataset_id,
+        owner=request.user,
+        is_active=True,
     )
-
-    if request.method != "POST":
-
-        return redirect(
-            "quality_checks_page",
-            dataset_id=dataset.id,
-        )
 
     form = QualityCheckForm(
         request.POST,
@@ -1827,13 +2248,12 @@ def create_quality_check(request, dataset_id):
     )
 
     if form.is_valid():
-
         quality_check = form.save(
             commit=False
         )
 
         quality_check.dataset = dataset
-
+        quality_check.is_active = True
         quality_check.save()
 
         messages.success(
@@ -1847,7 +2267,9 @@ def create_quality_check(request, dataset_id):
         )
 
     quality_checks = (
-        dataset.quality_checks.all()
+        dataset.quality_checks
+        .filter(is_active=True)
+        .order_by("id")
     )
 
     return render(
@@ -1855,35 +2277,38 @@ def create_quality_check(request, dataset_id):
         "quality_checks.html",
         {
             "dataset": dataset,
-
             "quality_checks": quality_checks,
-
             "form": form,
         },
+        status=400,
     )
+
+
 @require_POST
-def run_quality_checks(request, pipeline_id):
+@login_required
+def run_quality_checks(
+    request,
+    pipeline_id,
+):
     pipeline = get_object_or_404(
-        Pipeline.objects.select_related("dataset"),
+        Pipeline.objects.select_related(
+            "dataset"
+        ),
         id=pipeline_id,
+        dataset__owner=request.user,
+        dataset__is_active=True,
         status=Pipeline.Status.ACTIVE,
     )
 
-    dataset = pipeline.dataset
-
-    checks = (
-        QualityCheck.objects
-        .filter(
-            dataset=dataset,
-            is_active=True,
-        )
-        .order_by("id")
-    )
-
-    if not checks.exists():
+    if not pipeline.dataset.quality_checks.filter(
+        is_active=True
+    ).exists():
         messages.error(
             request,
-            "No active quality checks are configured for this dataset.",
+            (
+                "No active quality checks are "
+                "configured for this dataset."
+            ),
         )
 
         return redirect(
@@ -1891,45 +2316,28 @@ def run_quality_checks(request, pipeline_id):
             pipeline_id=pipeline.id,
         )
 
-    check_config = [
-        {
-            "check": check.check_type,
-            "column": check.column_name,
-            **(check.configuration or {}),
-        }
-        for check in checks
-    ]
-
     try:
-        engine = QualityEngine()
-
-        engine_result = engine.run_csv_checks(
-            file_path=dataset.file_path,
-            check_config=check_config,
-        )
-
-        persistence = QualityPersistenceService()
-
-        pipeline_run = persistence.save_run(
-            dataset=dataset,
-            pipeline=pipeline,
-            engine_result=engine_result,
+        pipeline_run = (
+            PipelineService()
+            .run_pipeline(
+                pipeline.id
+            )
         )
 
         messages.success(
             request,
-            f"Quality checks completed. "
-            f"Score: {pipeline_run.quality_score}%",
+            (
+                "Quality checks completed. "
+                f"Score: {pipeline_run.quality_score}%"
+            ),
         )
 
-        # IMPORTANT:
-        # Redirect using the PipelineRun ID
         return redirect(
-            "pipeline_run_detail_page",
+            "run_detail",
             run_id=pipeline_run.id,
         )
 
-    except Exception as exc:
+    except ValueError as exc:
         messages.error(
             request,
             f"Quality check execution failed: {exc}",
@@ -1940,30 +2348,34 @@ def run_quality_checks(request, pipeline_id):
             pipeline_id=pipeline.id,
         )
 
-def pipeline_run_detail_page(request, run_id):
-    pipeline_run = get_object_or_404(
-        PipelineRun.objects.select_related(
-            "pipeline",
-            "dataset",
-        ),
-        id=run_id,
-    )
+    except Exception as exc:
+        messages.error(
+            request,
+            (
+                "Quality check execution failed: "
+                f"{exc}"
+            ),
+        )
 
-    return render(
-        request,
-        "pipeline_run_detail.html",
-        {
-            "pipeline_run": pipeline_run,
-            "run_id": pipeline_run.id,
-        },
-    )
-def run_detail(request, run_id):
+        return redirect(
+            "pipeline_detail_page",
+            pipeline_id=pipeline.id,
+        )
+
+
+@login_required
+def run_detail(
+    request,
+    run_id,
+):
     run = get_object_or_404(
         PipelineRun.objects.select_related(
             "pipeline",
             "pipeline__dataset",
         ),
         id=run_id,
+        pipeline__dataset__owner=request.user,
+        pipeline__dataset__is_active=True,
     )
 
     results = (
@@ -1974,8 +2386,15 @@ def run_detail(request, run_id):
         .order_by("id")
     )
 
-    passed_checks = results.filter(passed=True).count()
-    failed_checks = results.filter(passed=False).count()
+    passed_checks = results.filter(
+        passed=True
+    ).count()
+
+    failed_checks = results.filter(
+        passed=False
+    ).count()
+
+    total_checks = results.count()
 
     return render(
         request,
@@ -1985,5 +2404,237 @@ def run_detail(request, run_id):
             "results": results,
             "passed_checks": passed_checks,
             "failed_checks": failed_checks,
+            "total_checks": total_checks,
+            "quality_score": (
+                run.quality_score
+            ),
+        },
+    )
+
+@login_required
+def alerts(request):
+    alerts = Alert.objects.filter(
+        pipeline__dataset__owner=request.user
+    ).select_related(
+        "pipeline",
+        "pipeline_run",
+    )
+
+    data = []
+
+    for alert in alerts:
+        data.append(
+            {
+                "id": alert.id,
+                "pipeline": {
+                    "id": alert.pipeline.id,
+                    "name": alert.pipeline.name,
+                },
+                "pipeline_run": (
+                    {
+                        "id": alert.pipeline_run.id,
+                        "status": alert.pipeline_run.status,
+                    }
+                    if alert.pipeline_run
+                    else None
+                ),
+                "alert_type": alert.alert_type,
+                "severity": alert.severity,
+                "status": alert.status,
+                "title": alert.title,
+                "message": alert.message,
+                "metadata": alert.metadata,
+                "created_at": alert.created_at,
+                "acknowledged_at": alert.acknowledged_at,
+                "resolved_at": alert.resolved_at,
+            }
+        )
+
+    return JsonResponse(
+        {
+            "count": len(data),
+            "alerts": data,
+        }
+    )
+@login_required
+def update_alert(request, alert_id):
+    if request.method != "PATCH":
+        return JsonResponse(
+            {
+                "error": "Only PATCH requests are allowed."
+            },
+            status=405,
+        )
+
+    alert = (
+        Alert.objects
+        .select_related(
+            "pipeline",
+            "pipeline_run",
+        )
+        .filter(
+            id=alert_id,
+            pipeline__dataset__owner=request.user,
+        )
+        .first()
+    )
+
+    if alert is None:
+        return JsonResponse(
+            {
+                "error": "Alert not found."
+            },
+            status=404,
+        )
+
+    try:
+        data = json.loads(
+            request.body.decode("utf-8")
+        )
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return JsonResponse(
+            {
+                "error": "Invalid JSON request body."
+            },
+            status=400,
+        )
+
+    new_status = data.get("status")
+
+    allowed_statuses = {
+        Alert.Status.OPEN,
+        Alert.Status.ACKNOWLEDGED,
+        Alert.Status.RESOLVED,
+    }
+
+    if new_status not in allowed_statuses:
+        return JsonResponse(
+            {
+                "error": (
+                    "Invalid status. "
+                    "Use OPEN, ACKNOWLEDGED, "
+                    "or RESOLVED."
+                )
+            },
+            status=400,
+        )
+
+    current_status = alert.status
+
+    if current_status == Alert.Status.RESOLVED:
+        if new_status != Alert.Status.RESOLVED:
+            return JsonResponse(
+                {
+                    "error": (
+                        "A resolved alert cannot be "
+                        "moved back to another status."
+                    )
+                },
+                status=400,
+            )
+
+    if (
+        current_status == Alert.Status.OPEN
+        and new_status == Alert.Status.OPEN
+    ):
+        return JsonResponse(
+            {
+                "message": "Alert is already open.",
+                "alert": {
+                    "id": alert.id,
+                    "status": alert.status,
+                },
+            }
+        )
+
+    if (
+        current_status == Alert.Status.ACKNOWLEDGED
+        and new_status == Alert.Status.OPEN
+    ):
+        return JsonResponse(
+            {
+                "error": (
+                    "An acknowledged alert cannot "
+                    "be moved back to OPEN."
+                )
+            },
+            status=400,
+        )
+
+    now = timezone.now()
+
+    if new_status == Alert.Status.ACKNOWLEDGED:
+        alert.status = Alert.Status.ACKNOWLEDGED
+
+        if alert.acknowledged_at is None:
+            alert.acknowledged_at = now
+
+    elif new_status == Alert.Status.RESOLVED:
+        alert.status = Alert.Status.RESOLVED
+
+        if alert.acknowledged_at is None:
+            alert.acknowledged_at = now
+
+        if alert.resolved_at is None:
+            alert.resolved_at = now
+
+    alert.save(
+        update_fields=[
+            "status",
+            "acknowledged_at",
+            "resolved_at",
+        ]
+    )
+
+    return JsonResponse(
+        {
+            "message": "Alert updated successfully.",
+            "alert": {
+                "id": alert.id,
+                "pipeline": {
+                    "id": alert.pipeline.id,
+                    "name": alert.pipeline.name,
+                },
+                "pipeline_run": (
+                    {
+                        "id": alert.pipeline_run.id,
+                        "status": alert.pipeline_run.status,
+                    }
+                    if alert.pipeline_run
+                    else None
+                ),
+                "alert_type": alert.alert_type,
+                "severity": alert.severity,
+                "status": alert.status,
+                "title": alert.title,
+                "message": alert.message,
+                "metadata": alert.metadata,
+                "created_at": alert.created_at,
+                "acknowledged_at": alert.acknowledged_at,
+                "resolved_at": alert.resolved_at,
+            },
+        }
+    )
+@login_required
+def alerts_page(request):
+    alerts_queryset = (
+        Alert.objects
+        .filter(
+            pipeline__dataset__owner=request.user,
+        )
+        .select_related(
+            "pipeline",
+            "pipeline_run",
+        )
+        .order_by(
+            "-created_at"
+        )
+    )
+
+    return render(
+        request,
+        "alerts.html",
+        {
+            "alerts": alerts_queryset,
         },
     )

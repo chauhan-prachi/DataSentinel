@@ -6,134 +6,154 @@
 {% block pipelines_active %}active{% endblock %}
 
 {% block extra_css %}
-<link
-    rel="stylesheet"
-    href="{% static 'css/pipeline_runs.css' %}"
->
+<link rel="stylesheet" href="{% static 'css/runs.css' %}">
 {% endblock %}
 
 {% block content %}
 
-<header class="topbar">
+<div class="runs-page">
 
-    <div>
-        <h1>Pipeline Runs</h1>
+    <header class="topbar">
 
-        <p>
-            Monitor and review historical pipeline executions.
-        </p>
-    </div>
+        <div class="page-heading">
 
-    <div class="topbar-actions">
+            <span class="eyebrow">
+                PIPELINE MONITORING
+            </span>
 
-        <button
-            id="refreshRuns"
-            class="refresh-btn"
-            type="button"
-        >
-            ↻ <span>Refresh</span>
-        </button>
+            <h1>
+                Pipeline Runs
+            </h1>
 
-    </div>
+            <p>
+                Monitor and review historical pipeline executions.
+            </p>
 
-</header>
-
-
-<section class="page-content">
-
-    <div
-        id="runsLoading"
-        class="loading-state"
-    >
-        Loading pipeline runs...
-    </div>
-
-
-    <div
-        id="runsError"
-        class="error-state hidden"
-    >
-
-        <div class="error-icon">
-            !
         </div>
 
-        <h3>
-            Unable to load pipeline runs
-        </h3>
+        <div class="topbar-actions">
 
-        <p id="runsErrorMessage">
-            Something went wrong.
-        </p>
+            <a
+                href="{% url 'runs_page' %}"
+                class="refresh-btn"
+            >
+                <span class="refresh-icon">↻</span>
+                Refresh
+            </a>
 
-        <button
-            id="retryRuns"
-            class="secondary-btn"
-            type="button"
-        >
-            Try Again
-        </button>
+        </div>
 
-    </div>
+    </header>
 
 
-    <div
-        id="runsContent"
-        class="hidden"
-    >
+    <main class="page-content">
 
         <section class="stats-grid">
 
-            <div class="stat-card">
+            <article class="stat-card">
 
-                <span>
-                    Total Runs
-                </span>
+                <div class="stat-icon">
+                    ⌁
+                </div>
 
-                <strong id="totalRuns">
-                    0
-                </strong>
+                <div class="stat-content">
 
-            </div>
+                    <span>
+                        Total Runs
+                    </span>
 
+                    <strong>
+                        {{ runs|length }}
+                    </strong>
 
-            <div class="stat-card">
+                    <small>
+                        All executions
+                    </small>
 
-                <span>
-                    Successful
-                </span>
+                </div>
 
-                <strong id="successfulRuns">
-                    0
-                </strong>
-
-            </div>
-
-
-            <div class="stat-card">
-
-                <span>
-                    Failed
-                </span>
-
-                <strong id="failedRuns">
-                    0
-                </strong>
-
-            </div>
+            </article>
 
 
-            <div class="stat-card">
+            <article class="stat-card">
 
-                <span>
-                    Avg Quality
-                </span>
+                <div class="stat-icon success-icon">
+                    ✓
+                </div>
 
-                <strong id="averageQuality">
-                    0.00%
-                </strong>
+                <div class="stat-content">
 
-            </div>
+                    <span>
+                        Successful
+                    </span>
+
+                    <strong>
+                        {{ successful_runs }}
+                    </strong>
+
+                    <small>
+                        Completed successfully
+                    </small>
+
+                </div>
+
+            </article>
+
+
+            <article class="stat-card">
+
+                <div class="stat-icon danger-icon">
+                    !
+                </div>
+
+                <div class="stat-content">
+
+                    <span>
+                        Failed
+                    </span>
+
+                    <strong>
+                        {{ failed_runs }}
+                    </strong>
+
+                    <small>
+                        Requires attention
+                    </small>
+
+                </div>
+
+            </article>
+
+
+            <article class="stat-card">
+
+                <div class="stat-icon score-icon">
+                    ◈
+                </div>
+
+                <div class="stat-content">
+
+                    <span>
+                        Average Quality
+                    </span>
+
+                    <strong>
+
+                        {% if average_quality != None %}
+                            {{ average_quality|floatformat:2 }}%
+                        {% else %}
+                            —
+                        {% endif %}
+
+                    </strong>
+
+                    <small>
+                        Across all runs
+                    </small>
+
+                </div>
+
+            </article>
 
         </section>
 
@@ -143,6 +163,11 @@
             <div class="section-header">
 
                 <div>
+
+                    <span class="section-label">
+                        EXECUTION HISTORY
+                    </span>
+
                     <h2>
                         Pipeline Execution History
                     </h2>
@@ -150,70 +175,206 @@
                     <p>
                         Review every pipeline execution and its quality results.
                     </p>
+
                 </div>
+
 
                 <div class="run-count">
-                    <span id="runCount">
-                        0
+
+                    <strong>
+                        {{ runs|length }}
+                    </strong>
+
+                    <span>
+                        runs
                     </span>
-                    runs
+
                 </div>
 
             </div>
 
 
-            <div class="table-container">
+            {% if runs %}
 
-                <table class="runs-table">
+            <div class="runs-list">
 
-                    <thead>
+                {% for run in runs %}
 
-                        <tr>
-                            <th>Run ID</th>
-                            <th>Pipeline</th>
-                            <th>Dataset</th>
-                            <th>Status</th>
-                            <th>Rows</th>
-                            <th>Quality Score</th>
-                            <th>Started</th>
-                            <th>Action</th>
-                        </tr>
+                <article class="run-row">
 
-                    </thead>
+                    <div class="run-id">
+
+                        <span class="run-number">
+                            #{{ run.id }}
+                        </span>
+
+                        <span class="run-label">
+                            PIPELINE RUN
+                        </span>
+
+                    </div>
 
 
-                    <tbody id="runsTableBody">
+                    <div class="run-main">
 
-                        <tr>
+                        <div class="run-title">
 
-                            <td
-                                colspan="8"
-                                class="empty-state"
-                            >
-                                Loading runs...
-                            </td>
+                            <h3>
+                                {{ run.pipeline.name }}
+                            </h3>
 
-                        </tr>
+                            <span class="dataset-name">
+                                {{ run.pipeline.dataset.name }}
+                            </span>
 
-                    </tbody>
+                        </div>
 
-                </table>
+
+                        <div class="run-meta">
+
+                            <span>
+                                <i>●</i>
+                                {{ run.rows_processed|default:"0" }} rows
+                            </span>
+
+                            <span>
+                                Started
+                                {{ run.started_at|date:"d M Y, h:i A" }}
+                            </span>
+
+                        </div>
+
+                    </div>
+
+
+                    <div class="run-quality">
+
+                        <span class="quality-label">
+                            QUALITY
+                        </span>
+
+                        <div class="quality-value">
+
+                            {% if run.quality_score != None %}
+
+                                {{ run.quality_score|floatformat:2 }}%
+
+                            {% else %}
+
+                                —
+
+                            {% endif %}
+
+                        </div>
+
+
+                        {% if run.quality_score != None %}
+
+                        <div class="quality-bar">
+
+                            {% if run.quality_score >= 90 %}
+
+                                <span class="quality-fill quality-excellent"></span>
+
+                            {% elif run.quality_score >= 75 %}
+
+                                <span class="quality-fill quality-good"></span>
+
+                            {% elif run.quality_score >= 50 %}
+
+                                <span class="quality-fill quality-warning"></span>
+
+                            {% else %}
+
+                                <span class="quality-fill quality-critical"></span>
+
+                            {% endif %}
+
+                        </div>
+
+                        {% endif %}
+
+                    </div>
+
+
+                    <div class="run-status">
+
+                        {% if run.status == "SUCCESS" %}
+
+                        <span class="status-badge success">
+                            <span class="status-dot"></span>
+                            SUCCESS
+                        </span>
+
+                        {% elif run.status == "FAILED" %}
+
+                        <span class="status-badge failed">
+                            <span class="status-dot"></span>
+                            FAILED
+                        </span>
+
+                        {% else %}
+
+                        <span class="status-badge running">
+                            <span class="status-dot"></span>
+                            {{ run.status }}
+                        </span>
+
+                        {% endif %}
+
+                    </div>
+
+
+                    <div class="run-action">
+
+                        <a
+                            href="{% url 'run_detail' run.id %}"
+                            class="view-btn"
+                        >
+                            View Details
+                            <span>→</span>
+                        </a>
+
+                    </div>
+
+                </article>
+
+                {% endfor %}
 
             </div>
+
+
+            {% else %}
+
+            <div class="empty-state">
+
+                <div class="empty-icon">
+                    ⌁
+                </div>
+
+                <h3>
+                    No pipeline runs yet
+                </h3>
+
+                <p>
+                    Run a pipeline to start monitoring your data quality.
+                </p>
+
+                <a
+                    href="{% url 'pipelines_page' %}"
+                    class="primary-btn"
+                >
+                    View Pipelines
+                </a>
+
+            </div>
+
+            {% endif %}
 
         </section>
 
-    </div>
+    </main>
 
-</section>
-
-{% endblock %}
-
-
-{% block extra_js %}
-
-<script
-    src="{% static 'js/pipeline_runs.js' %}"
-></script>
+</div>
 
 {% endblock %}

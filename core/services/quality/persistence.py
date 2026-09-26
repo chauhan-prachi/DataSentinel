@@ -1,10 +1,7 @@
 from django.db import transaction
-from django.contrib.auth.models import User
-from django.utils import timezone
 
 from core.models import (
     Dataset,
-    Pipeline,
     PipelineRun,
     QualityCheck,
     QualityIssue,
@@ -13,99 +10,6 @@ from core.models import (
 
 
 class QualityPersistenceService:
-    """
-    Persist quality-engine results into the DataSentinel database.
-    """
-
-    SYSTEM_USERNAME = "datasentinel"
-
-    @transaction.atomic
-    def persist_analysis(
-        self,
-        dataset_name: str,
-        engine_result: dict,
-        owner: User,
-    ) -> PipelineRun:
-        """
-        Create the dataset and pipeline records and persist
-        the complete quality analysis.
-        """
-
-        profile = engine_result["profile"]
-
-        dataset = Dataset.objects.create(
-            name=dataset_name,
-            description="Dataset analyzed by DataSentinel.",
-            owner=owner,
-            row_count=profile["row_count"],
-            column_count=profile["column_count"],
-            schema_snapshot={
-                "schema": engine_result.get("schema", []),
-                "profile": profile,
-            },
-        )
-
-        pipeline = Pipeline.objects.create(
-            name=f"{dataset_name} Quality Pipeline",
-            description="Automatic data-quality analysis pipeline.",
-            dataset=dataset,
-            status=Pipeline.Status.ACTIVE,
-        )
-
-        return self.save_run(
-            dataset=dataset,
-            pipeline=pipeline,
-            engine_result=engine_result,
-        )
-
-    @classmethod
-    def get_system_user(cls) -> User:
-        """
-        Return the DataSentinel system user.
-
-        This is temporary while the API is not authenticated.
-        Later this can be replaced with request.user.
-        """
-
-        user, _ = User.objects.get_or_create(
-            username=cls.SYSTEM_USERNAME,
-            defaults={
-                "email": "system@datasentinel.local",
-                "is_active": True,
-            },
-        )
-
-        return user
-
-    @transaction.atomic
-    def save_run(
-        self,
-        dataset: Dataset,
-        pipeline: Pipeline,
-        engine_result: dict,
-    ) -> PipelineRun:
-        """
-        Create a successful PipelineRun and persist all
-        quality results and issues.
-        """
-
-        summary = engine_result["summary"]
-
-        pipeline_run = PipelineRun.objects.create(
-            pipeline=pipeline,
-            status=PipelineRun.Status.SUCCESS,
-            rows_processed=engine_result["profile"]["row_count"],
-            quality_score=summary["quality_score"],
-            completed_at=timezone.now(),
-        )
-
-        self.save_results(
-            dataset=dataset,
-            pipeline_run=pipeline_run,
-            engine_result=engine_result,
-        )
-
-        return pipeline_run
 
     @transaction.atomic
     def save_results(
@@ -114,15 +18,15 @@ class QualityPersistenceService:
         pipeline_run: PipelineRun,
         engine_result: dict,
     ) -> None:
-        """
-        Persist every quality-engine result.
+        checks = engine_result.get("checks", [])
 
-        Existing QualityCheck configurations are reused.
-        A pipeline execution must NEVER silently create a
-        new QualityCheck configuration.
-        """
+        if not checks:
+            raise ValueError(
+                f"No quality check results were returned for "
+                f"dataset '{dataset.name}'."
+            )
 
-        for check_result in engine_result["checks"]:
+        for check_result in checks:
             self._save_check_result(
                 pipeline_run=pipeline_run,
                 dataset=dataset,
@@ -135,47 +39,59 @@ class QualityPersistenceService:
         dataset: Dataset,
         check_result: dict,
     ) -> QualityResult:
-        """
-        Match an engine result to an existing active QualityCheck,
-        then create the corresponding QualityResult.
-        """
+        check_name = check_result.get("check_name")
 
-        check_name = check_result["check_name"]
+        if not check_name:
+            raise ValueError(
+                "QualityEngine result is missing 'check_name'."
+            )
 
-        details = check_result.get(
-            "details",
-            {},
+        details = check_result.get("details") or {}
+
+        column_name = details.get("column", "")
+
+        quality_check = (
+            QualityCheck.objects
+            .filter(
+                dataset=dataset,
+                check_type=check_name,
+                column_name=column_name,
+                is_active=True,
+            )
+            .order_by("id")
+            .first()
         )
-
-        column_name = details.get(
-            "column",
-            "",
-        )
-
-        # ---------------------------------------------------------
-        # FIND EXISTING QUALITY CHECK
-        # ---------------------------------------------------------
-
-        quality_check = QualityCheck.objects.filter(
-            dataset=dataset,
-            check_type=check_name,
-            column_name=column_name,
-            is_active=True,
-        ).first()
 
         if quality_check is None:
             raise ValueError(
-                f"No active QualityCheck configuration found for "
+                "No active QualityCheck configuration found for "
                 f"{check_name} / {column_name or 'dataset'}."
             )
 
-        # ---------------------------------------------------------
-        # CALCULATE RESULT METRICS
-        # ---------------------------------------------------------
+        rows_checked = max(
+            int(check_result.get("rows_checked", 0)),
+            0,
+        )
 
-        rows_checked = check_result["rows_checked"]
-        rows_passed = check_result["rows_passed"]
-        rows_failed = check_result["rows_failed"]
+        rows_failed = max(
+            int(check_result.get("rows_failed", 0)),
+            0,
+        )
+
+        rows_passed = max(
+            int(check_result.get("rows_passed", 0)),
+            0,
+        )
+
+        rows_failed = min(
+            rows_failed,
+            rows_checked,
+        )
+
+        rows_passed = min(
+            rows_passed,
+            rows_checked - rows_failed,
+        )
 
         pass_rate = (
             round(
@@ -186,14 +102,12 @@ class QualityPersistenceService:
             else 0
         )
 
-        # ---------------------------------------------------------
-        # CREATE QUALITY RESULT
-        # ---------------------------------------------------------
-
         quality_result = QualityResult.objects.create(
             quality_check=quality_check,
             pipeline_run=pipeline_run,
-            passed=check_result["passed"],
+            passed=bool(
+                check_result.get("passed", False)
+            ),
             rows_checked=rows_checked,
             rows_passed=rows_passed,
             rows_failed=rows_failed,
@@ -201,15 +115,13 @@ class QualityPersistenceService:
             details=details,
         )
 
-        # ---------------------------------------------------------
-        # CREATE ISSUE FOR FAILED CHECK
-        # ---------------------------------------------------------
-
-        if not check_result["passed"]:
+        if not quality_result.passed:
             self._create_issue(
                 quality_result=quality_result,
                 check_result=check_result,
                 dataset=dataset,
+                rows_failed=rows_failed,
+                rows_checked=rows_checked,
             )
 
         return quality_result
@@ -219,23 +131,24 @@ class QualityPersistenceService:
         quality_result: QualityResult,
         check_result: dict,
         dataset: Dataset,
+        rows_failed: int,
+        rows_checked: int,
     ) -> QualityIssue:
-        """
-        Create a QualityIssue for a failed quality check.
-        """
-
-        failed_rows = check_result["rows_failed"]
-        total_rows = check_result["rows_checked"]
-        check_name = check_result["check_name"]
-
-        severity = self._determine_severity(
-            failed_rows=failed_rows,
-            total_rows=total_rows,
+        check_name = check_result.get(
+            "check_name",
+            "QUALITY",
         )
 
-        column = check_result["details"].get(
+        details = check_result.get("details") or {}
+
+        column = details.get(
             "column",
             "dataset",
+        )
+
+        severity = self._determine_severity(
+            failed_rows=rows_failed,
+            total_rows=rows_checked,
         )
 
         title = (
@@ -245,7 +158,18 @@ class QualityPersistenceService:
         description = (
             f"Dataset '{dataset.name}' failed the "
             f"{check_name} quality check. "
-            f"{failed_rows} row(s) failed the check."
+            f"{rows_failed} row(s) failed the check "
+            f"out of {rows_checked} checked."
+        )
+
+        ai_analysis = details.get(
+            "ai_analysis",
+            "",
+        )
+
+        ai_recommendation = details.get(
+            "ai_recommendation",
+            "",
         )
 
         return QualityIssue.objects.create(
@@ -253,6 +177,9 @@ class QualityPersistenceService:
             title=title,
             description=description,
             severity=severity,
+            status=QualityIssue.Status.OPEN,
+            ai_analysis=ai_analysis,
+            ai_recommendation=ai_recommendation,
         )
 
     @staticmethod
@@ -260,12 +187,7 @@ class QualityPersistenceService:
         failed_rows: int,
         total_rows: int,
     ) -> str:
-        """
-        Determine issue severity from the percentage of
-        failed rows.
-        """
-
-        if total_rows == 0:
+        if total_rows <= 0:
             return QualityIssue.Severity.LOW
 
         failure_percentage = (
@@ -282,4 +204,3 @@ class QualityPersistenceService:
             return QualityIssue.Severity.MEDIUM
 
         return QualityIssue.Severity.LOW
-

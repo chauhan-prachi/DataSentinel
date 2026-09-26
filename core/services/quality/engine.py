@@ -9,7 +9,6 @@ from .rule_suggester import RuleSuggester
 
 
 class QualityEngine:
-    """Orchestrates profiling and quality checks for datasets."""
 
     def __init__(self):
         self.profiler = DatasetProfiler()
@@ -20,11 +19,6 @@ class QualityEngine:
         file_path: str,
         check_config: list[dict],
     ) -> dict:
-        """
-        Run explicitly configured quality checks
-        on a local CSV file.
-        """
-
         path = Path(file_path)
 
         if not path.exists():
@@ -32,14 +26,24 @@ class QualityEngine:
                 f"Dataset not found: {file_path}"
             )
 
+        if not path.is_file():
+            raise ValueError(
+                f"Dataset path is not a file: {file_path}"
+            )
+
         if path.suffix.lower() != ".csv":
             raise ValueError(
                 "QualityEngine currently supports CSV files only."
             )
 
-        dataframe = pd.read_csv(path)
+        try:
+            dataframe = pd.read_csv(path)
+        except Exception as exc:
+            raise ValueError(
+                f"Unable to read CSV dataset: {exc}"
+            ) from exc
 
-        return self._run_dataframe_checks(
+        return self.run_dataframe_checks(
             dataframe=dataframe,
             dataset_name=str(path),
             check_config=check_config,
@@ -51,29 +55,18 @@ class QualityEngine:
         dataset_name: str = "dataset",
         check_config: list[dict] | None = None,
     ) -> dict:
-        """
-        Run quality checks against a DataFrame.
-
-        If check_config is None, quality rules are generated
-        automatically from the detected schema.
-        """
 
         if not isinstance(dataframe, pd.DataFrame):
             raise TypeError(
                 "dataframe must be a pandas DataFrame."
             )
 
-        # Remember whether rules were generated automatically.
-        automatic = check_config is None
-
-        # Detect the schema for every dataset.
         schema = self._detect_schema(dataframe)
 
+        automatic = check_config is None
+
         if automatic:
-            # Generate quality rules from the detected schema.
-            suggestions = self.rule_suggester.suggest(
-                schema
-            )
+            suggestions = self.rule_suggester.suggest(schema)
 
             check_config = [
                 {
@@ -85,8 +78,12 @@ class QualityEngine:
                 for suggestion in suggestions
             ]
         else:
-            # Explicit/manual rules were supplied.
             suggestions = []
+
+            if not isinstance(check_config, list):
+                raise TypeError(
+                    "check_config must be a list of dictionaries."
+                )
 
         result = self._run_dataframe_checks(
             dataframe=dataframe,
@@ -106,16 +103,27 @@ class QualityEngine:
         dataset_name: str,
         check_config: list[dict],
     ) -> dict:
-        """Execute a list of quality checks against a DataFrame."""
 
-        profile = self.profiler.profile_dataframe(
-            dataframe
-        )
+        profile = self.profiler.profile_dataframe(dataframe)
 
         results: list[CheckResult] = []
 
         for config in check_config:
-            check_type = config["check"]
+
+            if not isinstance(config, dict):
+                raise ValueError(
+                    "Each quality check configuration "
+                    "must be a dictionary."
+                )
+
+            check_type = config.get("check")
+
+            if not check_type:
+                raise ValueError(
+                    "Quality check configuration "
+                    "is missing 'check'."
+                )
+
             column = config.get("column")
 
             result = self._run_check(
@@ -140,9 +148,7 @@ class QualityEngine:
     def _detect_schema(
         self,
         dataframe: pd.DataFrame,
-    ) -> list[dict]:
-        """Detect semantic types for all dataset columns."""
-
+    ):
         from ..schema.detector import SchemaDetector
 
         detector = SchemaDetector()
@@ -155,39 +161,75 @@ class QualityEngine:
         check_type: str,
         column: str | None,
         config: dict,
-    ) -> CheckResult:
+    ):
 
         if check_type == "NOT_NULL":
+            self._require_column(
+                dataframe,
+                column,
+                check_type,
+            )
+
             return QualityChecks.not_null(
                 dataframe,
                 column,
             )
 
         if check_type == "UNIQUE":
+            self._require_column(
+                dataframe,
+                column,
+                check_type,
+            )
+
             return QualityChecks.unique(
                 dataframe,
                 column,
             )
 
         if check_type == "VALID_EMAIL":
+            self._require_column(
+                dataframe,
+                column,
+                check_type,
+            )
+
             return QualityChecks.valid_email(
                 dataframe,
                 column,
             )
 
         if check_type == "NUMERIC_VALIDITY":
+            self._require_column(
+                dataframe,
+                column,
+                check_type,
+            )
+
             return QualityChecks.numeric_validity(
                 dataframe,
                 column,
             )
 
         if check_type == "VALID_DATE":
+            self._require_column(
+                dataframe,
+                column,
+                check_type,
+            )
+
             return QualityChecks.valid_date(
                 dataframe,
                 column,
             )
 
         if check_type == "RANGE":
+            self._require_column(
+                dataframe,
+                column,
+                check_type,
+            )
+
             return QualityChecks.range_check(
                 dataframe,
                 column,
@@ -197,7 +239,7 @@ class QualityEngine:
 
         if check_type == "DUPLICATE":
             return QualityChecks.duplicate_rows(
-                dataframe,
+                dataframe
             )
 
         raise ValueError(
@@ -205,10 +247,26 @@ class QualityEngine:
         )
 
     @staticmethod
+    def _require_column(
+        dataframe: pd.DataFrame,
+        column: str | None,
+        check_type: str,
+    ):
+        if not column:
+            raise ValueError(
+                f"{check_type} check requires a column."
+            )
+
+        if column not in dataframe.columns:
+            raise ValueError(
+                f"{check_type} check references "
+                f"unknown column '{column}'."
+            )
+
+    @staticmethod
     def _build_summary(
         results: list[CheckResult],
     ) -> dict:
-        """Build aggregate quality metrics."""
 
         total_checks = len(results)
 
@@ -222,7 +280,7 @@ class QualityEngine:
             total_checks - passed_checks
         )
 
-        score = (
+        quality_score = (
             round(
                 (passed_checks / total_checks) * 100,
                 2,
@@ -235,5 +293,5 @@ class QualityEngine:
             "total_checks": total_checks,
             "passed_checks": passed_checks,
             "failed_checks": failed_checks,
-            "quality_score": score,
+            "quality_score": quality_score,
         }

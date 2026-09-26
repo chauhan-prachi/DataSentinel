@@ -8,13 +8,11 @@ os.environ.setdefault(
 )
 
 django.setup()
-from django.utils import timezone
-from core.models import Dataset, DataSource, Pipeline
-from core.services.quality.engine import QualityEngine
-from core.services.quality.persistence import (
-    QualityPersistenceService,
-)
+
 from django.contrib.auth.models import User
+
+from core.models import Dataset, DataSource, Pipeline
+from core.services.pipeline import PipelineService
 
 
 user, _ = User.objects.get_or_create(
@@ -47,43 +45,18 @@ pipeline, _ = Pipeline.objects.get_or_create(
     },
 )
 
-engine = QualityEngine()
-
-check_config = [
-    {
-        "check": "NOT_NULL",
-        "column": "email",
-    },
-    {
-        "check": "UNIQUE",
-        "column": "customer_id",
-    },
-    {
-        "check": "VALID_EMAIL",
-        "column": "email",
-    },
-    {
-        "check": "RANGE",
-        "column": "age",
-        "minimum": 0,
-        "maximum": 120,
-    },
-    {
-        "check": "DUPLICATE",
-    },
-]
-
-engine_result = engine.run_csv_checks(
-    "data/customers.csv",
-    check_config,
+pipeline.status = Pipeline.Status.ACTIVE
+pipeline.save(
+    update_fields=["status"]
 )
 
-persistence = QualityPersistenceService()
+dataset.is_active = True
+dataset.save(
+    update_fields=["is_active"]
+)
 
-pipeline_run = persistence.save_run(
-    dataset=dataset,
-    pipeline=pipeline,
-    engine_result=engine_result,
+pipeline_run = PipelineService().run_pipeline(
+    pipeline.id
 )
 
 print()
@@ -91,3 +64,6 @@ print("Quality run saved successfully.")
 print(f"Pipeline Run ID: {pipeline_run.id}")
 print(f"Quality Score: {pipeline_run.quality_score}")
 print(f"Status: {pipeline_run.status}")
+print(f"Rows Processed: {pipeline_run.rows_processed}")
+print(f"Checks Passed: {pipeline_run.checks_passed}")
+print(f"Checks Failed: {pipeline_run.checks_failed}")

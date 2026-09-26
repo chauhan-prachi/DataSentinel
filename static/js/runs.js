@@ -1,15 +1,22 @@
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", function () {
+
     loadRuns();
 
     const refreshButton = document.getElementById("refreshRuns");
+    const retryButton = document.getElementById("retryRuns");
 
     if (refreshButton) {
         refreshButton.addEventListener("click", loadRuns);
+    }
+
+    if (retryButton) {
+        retryButton.addEventListener("click", loadRuns);
     }
 });
 
 
 async function loadRuns() {
+
     const loading = document.getElementById("runsLoading");
     const panel = document.getElementById("runsPanel");
     const error = document.getElementById("runsError");
@@ -19,30 +26,122 @@ async function loadRuns() {
     hideElement(error);
 
     try {
-        const response = await fetch("/api/runs/");
+
+        const response = await fetch("/api/runs/", {
+            method: "GET",
+            headers: {
+                "Accept": "application/json"
+            }
+        });
 
         if (!response.ok) {
-            throw new Error(`Request failed: ${response.status}`);
+            throw new Error(
+                "Request failed: " + response.status
+            );
         }
 
         const data = await response.json();
 
-        renderRuns(data.runs || []);
+        const runs = Array.isArray(data.runs)
+            ? data.runs
+            : [];
+
+        updateSummary(runs);
+        renderRuns(runs);
 
         hideElement(loading);
         showElement(panel);
 
-    } catch (err) {
-        console.error("Runs loading error:", err);
+    } catch (errorObject) {
+
+        console.error(
+            "Runs loading error:",
+            errorObject
+        );
 
         hideElement(loading);
+        hideElement(panel);
         showElement(error);
     }
 }
 
 
+function updateSummary(runs) {
+
+    const totalElement =
+        document.getElementById("totalRuns");
+
+    const successfulElement =
+        document.getElementById("successfulRuns");
+
+    const failedElement =
+        document.getElementById("failedRuns");
+
+    const averageElement =
+        document.getElementById("averageQuality");
+
+
+    const total = runs.length;
+
+    const successful = runs.filter(function (run) {
+        return run.status === "SUCCESS";
+    }).length;
+
+    const failed = runs.filter(function (run) {
+        return run.status === "FAILED";
+    }).length;
+
+
+    const scores = runs
+        .map(function (run) {
+            return Number(run.quality_score);
+        })
+        .filter(function (score) {
+            return Number.isFinite(score);
+        });
+
+
+    let average = null;
+
+    if (scores.length > 0) {
+
+        const totalScore = scores.reduce(
+            function (sum, score) {
+                return sum + score;
+            },
+            0
+        );
+
+        average = totalScore / scores.length;
+    }
+
+
+    if (totalElement) {
+        totalElement.textContent = total;
+    }
+
+    if (successfulElement) {
+        successfulElement.textContent = successful;
+    }
+
+    if (failedElement) {
+        failedElement.textContent = failed;
+    }
+
+    if (averageElement) {
+
+        averageElement.textContent =
+            average !== null
+                ? average.toFixed(1) + "%"
+                : "—";
+    }
+}
+
+
 function renderRuns(runs) {
-    const tbody = document.getElementById("runsTable");
+
+    const tbody =
+        document.getElementById("runsTable");
 
     if (!tbody) {
         return;
@@ -50,10 +149,15 @@ function renderRuns(runs) {
 
     tbody.innerHTML = "";
 
+
     if (runs.length === 0) {
+
         tbody.innerHTML = `
             <tr>
-                <td colspan="8" class="run-empty">
+                <td
+                    colspan="8"
+                    class="run-empty"
+                >
                     No pipeline runs found.
                 </td>
             </tr>
@@ -62,10 +166,42 @@ function renderRuns(runs) {
         return;
     }
 
-    runs.forEach((run) => {
-        const row = document.createElement("tr");
+
+    runs.forEach(function (run) {
+
+        const row =
+            document.createElement("tr");
+
+        row.setAttribute(
+            "data-run-id",
+            run.id
+        );
+
+
+        const qualityScore =
+            run.quality_score !== null &&
+            run.quality_score !== undefined
+                ? Number(run.quality_score)
+                : null;
+
+
+        const qualityHtml =
+            qualityScore !== null &&
+            Number.isFinite(qualityScore)
+                ? `
+                    <span class="run-quality ${getQualityClass(qualityScore)}">
+                        ${qualityScore.toFixed(2)}%
+                    </span>
+                `
+                : `
+                    <span class="quality-na">
+                        —
+                    </span>
+                `;
+
 
         row.innerHTML = `
+
             <td>
                 <button
                     class="run-id-button"
@@ -95,24 +231,11 @@ function renderRuns(runs) {
             </td>
 
             <td>
-                ${run.rows_processed ?? 0}
+                ${Number(run.rows_processed || 0).toLocaleString("en-IN")}
             </td>
 
             <td>
-                ${
-                    run.quality_score !== null &&
-                    run.quality_score !== undefined
-                        ? `
-                            <span class="run-quality ${getQualityClass(
-                                Number(run.quality_score)
-                            )}">
-                                ${Number(run.quality_score).toFixed(2)}%
-                            </span>
-                        `
-                        : `
-                            <span class="quality-na">—</span>
-                        `
-                }
+                ${qualityHtml}
             </td>
 
             <td>
@@ -122,11 +245,29 @@ function renderRuns(runs) {
             <td>
                 ${formatDate(run.completed_at)}
             </td>
+
         `;
 
-        row.addEventListener("click", () => {
-            window.location.href = `/runs/${run.id}/`;
-        });
+
+        row.addEventListener(
+            "click",
+            function (event) {
+
+                if (
+                    event.target.closest(
+                        ".run-id-button"
+                    )
+                ) {
+                    window.location.href =
+                        "/runs/" + run.id + "/";
+                    return;
+                }
+
+                window.location.href =
+                    "/runs/" + run.id + "/";
+            }
+        );
+
 
         tbody.appendChild(row);
     });
@@ -134,7 +275,9 @@ function renderRuns(runs) {
 
 
 function getStatusClass(status) {
+
     switch (status) {
+
         case "SUCCESS":
             return "success";
 
@@ -151,6 +294,7 @@ function getStatusClass(status) {
 
 
 function getQualityClass(score) {
+
     if (score >= 80) {
         return "quality-good";
     }
@@ -164,27 +308,37 @@ function getQualityClass(score) {
 
 
 function formatDate(dateString) {
+
     if (!dateString) {
         return "—";
     }
 
-    const date = new Date(dateString);
+    const date =
+        new Date(dateString);
 
-    if (Number.isNaN(date.getTime())) {
+    if (
+        Number.isNaN(
+            date.getTime()
+        )
+    ) {
         return escapeHtml(dateString);
     }
 
-    return date.toLocaleString("en-IN", {
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
-        hour: "numeric",
-        minute: "2-digit"
-    });
+    return date.toLocaleString(
+        "en-IN",
+        {
+            day: "2-digit",
+            month: "short",
+            year: "numeric",
+            hour: "numeric",
+            minute: "2-digit"
+        }
+    );
 }
 
 
 function showElement(element) {
+
     if (element) {
         element.classList.remove("hidden");
     }
@@ -192,6 +346,7 @@ function showElement(element) {
 
 
 function hideElement(element) {
+
     if (element) {
         element.classList.add("hidden");
     }
@@ -199,7 +354,11 @@ function hideElement(element) {
 
 
 function escapeHtml(value) {
-    if (value === null || value === undefined) {
+
+    if (
+        value === null ||
+        value === undefined
+    ) {
         return "";
     }
 

@@ -1,0 +1,654 @@
+{% load static %}
+
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>DataSentinel | Data Reliability Platform</title>
+
+<link
+    rel="stylesheet"
+    href="{% static 'css/landing.css' %}"
+>
+```
+
+</head>
+
+<body>
+
+<header class="landing-navbar">
+
+```
+<div class="brand">
+    <div class="brand-icon">◈</div>
+
+    <div>
+        <h1>DataSentinel</h1>
+        <span>DATA RELIABILITY</span>
+    </div>
+</div>
+
+<nav class="landing-nav">
+    <a href="#how-it-works">How it Works</a>
+    <a href="#features">Features</a>
+
+    <a
+        href="{% url 'login' %}"
+        class="nav-login"
+    >
+        Sign In
+    </a>
+
+    <a
+        href="{% url 'signup' %}"
+        class="nav-signup"
+    >
+        Get Started
+    </a>
+</nav>
+```
+
+</header>
+
+<main class="landing-container">
+
+```
+<section class="hero-section">
+
+    <div class="hero-content">
+
+        <div class="hero-badge">
+            ● DATA RELIABILITY PLATFORM
+        </div>
+
+        <h2>
+            Know when your data
+            <span>stops being reliable.</span>
+        </h2>
+
+        <p>
+            DataSentinel continuously monitors your datasets,
+            runs automated quality checks, detects issues,
+            and helps you understand what went wrong.
+        </p>
+
+        <div class="hero-actions">
+
+            <a
+                href="{% url 'signup' %}"
+                class="primary-button"
+            >
+                Start Monitoring →
+            </a>
+
+            <a
+                href="#dashboard-preview"
+                class="secondary-button"
+            >
+                Explore Dashboard
+            </a>
+
+        </div>
+
+    </div>
+
+
+    <div class="hero-status-card">
+
+        <div class="status-card-header">
+            <span>DATA RELIABILITY STATUS</span>
+
+            <div class="live-indicator">
+                <span></span>
+                LIVE
+            </div>
+        </div>
+
+        <div class="reliability-score">
+
+            <div class="score-circle">
+                <strong>
+                    {{ demo_metrics.quality_score }}%
+                </strong>
+
+                <span>RELIABLE</span>
+            </div>
+
+            <div class="score-info">
+
+                <h3>System Health</h3>
+
+                <p>
+                    Your data infrastructure is operating normally.
+                </p>
+
+                <div class="health-status">
+                    <span class="status-dot"></span>
+                    Healthy
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</section>
+
+
+
+<section
+    class="metrics-section"
+    id="dashboard-preview"
+>
+
+    <div class="section-heading">
+
+        <div>
+            <span class="section-label">
+                LIVE OVERVIEW
+            </span>
+
+            <h2>
+                Your data reliability at a glance
+            </h2>
+        </div>
+
+        <span class="demo-label">
+            DEMO DATA
+        </span>
+
+    </div>
+
+
+    <div class="metrics-grid">
+
+        <div class="metric-card">
+
+            <div class="metric-icon">
+                ▦
+            </div>
+
+            <div>
+
+                <span>Datasets</span>
+
+                <strong>
+                    {{ demo_metrics.datasets }}
+                </strong>
+
+                <small>
+                    Connected sources
+                </small>
+
+            </div>
+
+        </div>
+
+
+        <div class="metric-card">
+
+            <div class="metric-icon">
+                ◇
+            </div>
+
+            <div>
+
+                <span>Pipelines</span>
+
+                <strong>
+                    {{ demo_metrics.pipelines }}
+                </strong>
+
+                <small>
+                    Active monitors
+                </small>
+
+            </div>
+
+        </div>
+
+
+        <div class="metric-card">
+
+            <div class="metric-icon">
+                ↻
+            </div>
+
+            <div>
+
+                <span>Pipeline Runs</span>
+
+                <strong>
+                    {{ demo_metrics.pipeline_runs }}
+                </strong>
+
+                <small>
+                    Total executions
+                </small>
+
+            </div>
+
+        </div>
+
+
+        <div class="metric-card warning-card">
+
+            <div class="metric-icon">
+                !
+            </div>
+
+            <div>
+
+                <span>Open Issues</span>
+
+                <strong>
+                    {{ demo_metrics.open_issues }}
+                </strong>
+
+                <small>
+                    Require attention
+                </small>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</section>
+
+
+
+<section class="preview-grid">
+
+    <div class="preview-card chart-card">
+
+        <div class="card-header">
+
+            <div>
+
+                <span class="card-label">
+                    DATA QUALITY
+                </span>
+
+                <h3>
+                    Quality Trend
+                </h3>
+
+            </div>
+
+            <span class="trend-value">
+                +12.4%
+            </span>
+
+        </div>
+
+
+        <div class="chart-placeholder">
+
+            <div class="chart-line">
+
+                <span style="height: 45%;"></span>
+                <span style="height: 58%;"></span>
+                <span style="height: 52%;"></span>
+                <span style="height: 70%;"></span>
+                <span style="height: 82%;"></span>
+                <span style="height: 76%;"></span>
+                <span style="height: 92%;"></span>
+
+            </div>
+
+            <div class="chart-labels">
+
+                {% for item in quality_trend_data %}
+
+                    <span>
+                        {{ item.date }}
+                    </span>
+
+                {% endfor %}
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+
+    <div class="preview-card health-card">
+
+        <div class="card-header">
+
+            <div>
+
+                <span class="card-label">
+                    PIPELINE STATUS
+                </span>
+
+                <h3>
+                    Pipeline Health
+                </h3>
+
+            </div>
+
+        </div>
+
+
+        <div class="pipeline-list">
+
+            {% for pipeline in pipeline_health %}
+
+                <div class="pipeline-row">
+
+                    <div class="pipeline-name">
+
+                        <span
+                            class="pipeline-status
+                            {{ pipeline.status|lower }}"
+                        ></span>
+
+                        <div>
+
+                            <strong>
+                                {{ pipeline.name }}
+                            </strong>
+
+                            <small>
+                                {{ pipeline.quality_score }}%
+                                quality score
+                            </small>
+
+                        </div>
+
+                    </div>
+
+
+                    <span
+                        class="pipeline-badge
+                        {{ pipeline.status|lower }}"
+                    >
+                        {{ pipeline.status }}
+                    </span>
+
+                </div>
+
+            {% endfor %}
+
+        </div>
+
+    </div>
+
+</section>
+
+
+
+<section
+    class="how-it-works"
+    id="how-it-works"
+>
+
+    <div class="section-heading centered">
+
+        <span class="section-label">
+            HOW IT WORKS
+        </span>
+
+        <h2>
+            From raw data to reliable data
+        </h2>
+
+        <p>
+            Monitor your data quality in four simple steps.
+        </p>
+
+    </div>
+
+
+    <div class="steps-grid">
+
+        <div class="step-card">
+
+            <div class="step-number">
+                01
+            </div>
+
+            <div class="step-icon">
+                ↑
+            </div>
+
+            <h3>
+                Connect
+            </h3>
+
+            <p>
+                Upload and connect your datasets to DataSentinel.
+            </p>
+
+        </div>
+
+
+        <div class="step-card">
+
+            <div class="step-number">
+                02
+            </div>
+
+            <div class="step-icon">
+                ◉
+            </div>
+
+            <h3>
+                Profile
+            </h3>
+
+            <p>
+                Automatically understand your schema and data patterns.
+            </p>
+
+        </div>
+
+
+        <div class="step-card">
+
+            <div class="step-number">
+                03
+            </div>
+
+            <div class="step-icon">
+                ✓
+            </div>
+
+            <h3>
+                Monitor
+            </h3>
+
+            <p>
+                Run automated quality checks continuously.
+            </p>
+
+        </div>
+
+
+        <div class="step-card">
+
+            <div class="step-number">
+                04
+            </div>
+
+            <div class="step-icon">
+                !
+            </div>
+
+            <h3>
+                Resolve
+            </h3>
+
+            <p>
+                Detect and investigate issues before they impact users.
+            </p>
+
+        </div>
+
+    </div>
+
+</section>
+
+
+
+<section
+    class="features-section"
+    id="features"
+>
+
+    <div class="features-content">
+
+        <span class="section-label">
+            BUILT FOR RELIABLE DATA
+        </span>
+
+        <h2>
+            Everything you need to monitor your data
+        </h2>
+
+        <p>
+            DataSentinel brings dataset monitoring, quality checks,
+            pipeline reliability, and issue tracking into one workspace.
+        </p>
+
+    </div>
+
+
+    <div class="features-list">
+
+        <div class="feature-item">
+
+            <span>✓</span>
+
+            <div>
+
+                <h3>
+                    Automated Quality Checks
+                </h3>
+
+                <p>
+                    Detect missing values, duplicates,
+                    invalid formats, and data anomalies.
+                </p>
+
+            </div>
+
+        </div>
+
+
+        <div class="feature-item">
+
+            <span>✓</span>
+
+            <div>
+
+                <h3>
+                    Pipeline Monitoring
+                </h3>
+
+                <p>
+                    Track pipeline runs and identify failures quickly.
+                </p>
+
+            </div>
+
+        </div>
+
+
+        <div class="feature-item">
+
+            <span>✓</span>
+
+            <div>
+
+                <h3>
+                    Issue Tracking
+                </h3>
+
+                <p>
+                    Investigate data quality problems
+                    and track their resolution.
+                </p>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</section>
+
+
+
+<section class="cta-section">
+
+    <div>
+
+        <span class="section-label">
+            GET STARTED
+        </span>
+
+        <h2>
+            Start monitoring your data today.
+        </h2>
+
+        <p>
+            Connect your first dataset and discover what is happening
+            inside your data pipelines.
+        </p>
+
+    </div>
+
+
+    <a
+        href="{% url 'signup' %}"
+        class="primary-button"
+    >
+        Create Free Account →
+    </a>
+
+</section>
+```
+
+</main>
+
+<footer class="landing-footer">
+
+```
+<div class="brand">
+
+    <div class="brand-icon">
+        ◈
+    </div>
+
+    <div>
+
+        <h3>
+            DataSentinel
+        </h3>
+
+        <span>
+            DATA RELIABILITY
+        </span>
+
+    </div>
+
+</div>
+
+
+<p>
+    Monitor. Detect. Resolve.
+</p>
+</footer>
+
+</body>
+</html>

@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% load static %}
 
-{% block title %}DataSentinel | Run Detail{% endblock %}
+{% block title %}DataSentinel | Run #{{ run.id }}{% endblock %}
 
 {% block runs_active %}active{% endblock %}
 
@@ -13,138 +13,1069 @@
 
 <header class="topbar">
 
-    <div>
+    <div class="page-heading">
+
+        <div class="breadcrumb">
+            <a href="{% url 'runs_page' %}">Pipeline Runs</a>
+            <span>/</span>
+            <span>Run #{{ run.id }}</span>
+        </div>
+
+        <span class="eyebrow">EXECUTION DETAILS</span>
+
         <h1>Run #{{ run.id }}</h1>
-        <p>Pipeline execution details and quality results.</p>
+
+        <p>
+            Pipeline execution details and quality results.
+        </p>
+
     </div>
 
     <div class="topbar-actions">
+
         <a href="{% url 'runs_page' %}" class="back-btn">
-            ← Back to Runs
+            <span>←</span>
+            Back to Runs
         </a>
+
     </div>
 
 </header>
+
 
 {% if error %}
 
 <section class="page-content">
 
     <div class="error-state">
+
         <div class="error-icon">!</div>
 
         <h3>{{ error }}</h3>
 
-        <p>The requested pipeline run could not be found.</p>
+        <p>
+            The requested pipeline run could not be found.
+        </p>
 
         <a href="{% url 'runs_page' %}" class="back-btn">
             Back to Runs
         </a>
+
     </div>
 
 </section>
 
 {% else %}
 
-<section class="page-content">
+<main class="page-content">
 
-    <div class="run-header">
 
-        <div>
-            <h2>{{ run.pipeline.name }}</h2>
-            <p>{{ run.pipeline.dataset.name }}</p>
-        </div>
+    <section class="run-hero">
 
-        <span class="run-status run-{{ run.status|lower }}">
-            {{ run.status }}
-        </span>
+        <div class="run-identity">
 
-    </div>
-
-    <div class="run-metrics">
-
-        <div class="metric-card">
-            <span>Rows Processed</span>
-            <strong>{{ run.rows_processed|default:0 }}</strong>
-        </div>
-
-        <div class="metric-card">
-            <span>Quality Score</span>
-
-            <strong>
-                {% if run.quality_score != None %}
-                    {{ run.quality_score|floatformat:2 }}%
-                {% else %}
-                    --
-                {% endif %}
-            </strong>
-        </div>
-
-        <div class="metric-card">
-            <span>Passed Checks</span>
-            <strong>{{ passed_checks }}</strong>
-        </div>
-
-        <div class="metric-card">
-            <span>Failed Checks</span>
-            <strong>{{ failed_checks }}</strong>
-        </div>
-
-    </div>
-
-    <section class="panel">
-
-        <div class="panel-header">
+            <div class="pipeline-icon">
+                ⌁
+            </div>
 
             <div>
-                <h2>Run Information</h2>
-                <p>Execution metadata</p>
+
+                <span class="section-label">
+                    PIPELINE EXECUTION
+                </span>
+
+                <h2>
+                    {{ run.pipeline.name }}
+                </h2>
+
+                <p>
+                    Dataset:
+                    <strong>{{ run.pipeline.dataset.name }}</strong>
+                </p>
+
             </div>
 
         </div>
 
-        <div class="run-information">
 
-            <div>
-                <span>Run ID</span>
-                <strong>#{{ run.id }}</strong>
-            </div>
+        <div class="run-status-wrapper">
 
-            <div>
-                <span>Pipeline</span>
-                <strong>{{ run.pipeline.name }}</strong>
-            </div>
+            <span class="status-label">
+                STATUS
+            </span>
 
-            <div>
-                <span>Dataset</span>
-                <strong>{{ run.pipeline.dataset.name }}</strong>
-            </div>
+            {% if run.status == "SUCCESS" %}
 
-            <div>
-                <span>Started</span>
-                <strong>{{ run.started_at|date:"d M Y, h:i A" }}</strong>
-            </div>
+            <span class="run-status success">
+                <span class="status-dot"></span>
+                SUCCESS
+            </span>
 
-            <div>
-                <span>Completed</span>
+            {% elif run.status == "FAILED" %}
 
-                <strong>
-                    {% if run.completed_at %}
-                        {{ run.completed_at|date:"d M Y, h:i A" }}
-                    {% else %}
-                        --
-                    {% endif %}
-                </strong>
-            </div>
+            <span class="run-status failed">
+                <span class="status-dot"></span>
+                FAILED
+            </span>
 
-            <div>
-                <span>Status</span>
-                <strong>{{ run.status }}</strong>
-            </div>
+            {% else %}
+
+            <span class="run-status running">
+                <span class="status-dot"></span>
+                {{ run.status }}
+            </span>
+
+            {% endif %}
 
         </div>
 
     </section>
+
+
+    <section class="run-overview">
+
+
+        <article class="metric-card rows-card">
+
+            <div class="metric-icon">
+                ▦
+            </div>
+
+            <div class="metric-content">
+
+                <span>Rows Processed</span>
+
+                <strong>
+                    {{ run.rows_processed|default:0 }}
+                </strong>
+
+                <small>
+                    Records evaluated
+                </small>
+
+            </div>
+
+        </article>
+
+
+        <article class="metric-card score-card">
+
+            <div class="metric-icon">
+                ◈
+            </div>
+
+            <div class="metric-content">
+
+                <span>Quality Score</span>
+
+                <strong>
+                    {% if run.quality_score != None %}
+                        {{ run.quality_score|floatformat:2 }}%
+                    {% else %}
+                        —
+                    {% endif %}
+                </strong>
+
+                <small>
+                    Overall data quality
+                </small>
+
+            </div>
+
+        </article>
+
+
+        <article class="metric-card passed-card">
+
+            <div class="metric-icon">
+                ✓
+            </div>
+
+            <div class="metric-content">
+
+                <span>Passed Checks</span>
+
+                <strong>
+                    {{ passed_checks }}
+                </strong>
+
+                <small>
+                    Checks passed
+                </small>
+
+            </div>
+
+        </article>
+
+
+        <article class="metric-card failed-card">
+
+            <div class="metric-icon">
+                !
+            </div>
+
+            <div class="metric-content">
+
+                <span>Failed Checks</span>
+
+                <strong>
+                    {{ failed_checks }}
+                </strong>
+
+                <small>
+                    Checks requiring attention
+                </small>
+
+            </div>
+
+        </article>
+
+    </section>
+
+        <div class="reliability-rca-layout">
+
+        <section class="panel reliability-panel">
+
+            <div class="panel-header">
+
+                <div>
+
+                    <span class="section-label">
+                        DATA RELIABILITY
+                    </span>
+
+                    <h2>
+                        Reliability Overview
+                    </h2>
+
+                    <p>
+                        Overall assessment of pipeline and data reliability.
+                    </p>
+
+                </div>
+
+                {% if run.reliability_status %}
+
+                <span class="reliability-status
+                    {% if run.reliability_status == 'RELIABLE' %}
+                        reliable
+                    {% elif run.reliability_status == 'DEGRADED' %}
+                        degraded
+                    {% else %}
+                        unreliable
+                    {% endif %}
+                ">
+                    {{ run.reliability_status }}
+                </span>
+
+                {% endif %}
+
+            </div>
+
+
+            {% if run.reliability_score != None %}
+
+            <div class="reliability-summary">
+
+                <div class="reliability-score-box">
+
+                    <span>
+                        SCORE
+                    </span>
+
+                    <strong>
+                        {{ run.reliability_score|floatformat:1 }}
+                    </strong>
+
+                    <small>
+                        / 100
+                    </small>
+
+                </div>
+
+
+                <div class="reliability-grade-box">
+
+                    <span>
+                        GRADE
+                    </span>
+
+                    <strong>
+                        {{ run.reliability_grade }}
+                    </strong>
+
+                </div>
+
+
+                <div class="reliability-status-box">
+
+                    <span>
+                        STATUS
+                    </span>
+
+                    <strong>
+                        {{ run.reliability_status }}
+                    </strong>
+
+                </div>
+
+            </div>
+
+
+            <div class="reliability-factors">
+
+                <div class="subsection-heading">
+
+                    <span>
+                        RELIABILITY FACTORS
+                    </span>
+
+                </div>
+
+
+                <div class="factor-list">
+
+                    <div class="factor-item">
+
+                        <div class="factor-header">
+
+                            <div class="factor-name">
+                                <span class="factor-icon">
+                                    ✓
+                                </span>
+
+                                <span>
+                                    Data Quality
+                                </span>
+                            </div>
+
+                            <strong>
+                                {{ run.metadata.reliability.breakdown.quality|floatformat:0 }}%
+                            </strong>
+
+                        </div>
+
+                        <div class="factor-track">
+                            <span
+                                class="factor-fill quality"
+                                style="--factor-width: {{ run.metadata.reliability.breakdown.quality }}%;"
+                            ></span>
+                        </div>
+
+                    </div>
+
+
+                    <div class="factor-item">
+
+                        <div class="factor-header">
+
+                            <div class="factor-name">
+                                <span class="factor-icon">
+                                    #
+                                </span>
+
+                                <span>
+                                    Schema Stability
+                                </span>
+                            </div>
+
+                            <strong>
+                                {{ run.metadata.reliability.breakdown.schema|floatformat:0 }}%
+                            </strong>
+
+                        </div>
+
+                        <div class="factor-track">
+                            <span
+                                class="factor-fill schema"
+                                style="--factor-width: {{ run.metadata.reliability.breakdown.schema }}%;"
+                            ></span>
+                        </div>
+
+                    </div>
+
+
+                    <div class="factor-item">
+
+                        <div class="factor-header">
+
+                            <div class="factor-name">
+                                <span class="factor-icon">
+                                    !
+                                </span>
+
+                                <span>
+                                    Anomalies
+                                </span>
+                            </div>
+
+                            <strong>
+                                {{ run.metadata.reliability.breakdown.anomalies|floatformat:0 }}%
+                            </strong>
+
+                        </div>
+
+                        <div class="factor-track">
+                            <span
+                                class="factor-fill anomalies"
+                                style="--factor-width: {{ run.metadata.reliability.breakdown.anomalies }}%;"
+                            ></span>
+                        </div>
+
+                    </div>
+
+
+                    <div class="factor-item">
+
+                        <div class="factor-header">
+
+                            <div class="factor-name">
+                                <span class="factor-icon">
+                                    ◉
+                                </span>
+
+                                <span>
+                                    Pipeline Execution
+                                </span>
+                            </div>
+
+                            <strong>
+                                {{ run.metadata.reliability.breakdown.pipeline|floatformat:0 }}%
+                            </strong>
+
+                        </div>
+
+                        <div class="factor-track">
+                            <span
+                                class="factor-fill pipeline"
+                                style="--factor-width: {{ run.metadata.reliability.breakdown.pipeline }}%;"
+                            ></span>
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            {% if run.metadata.reliability.reasons %}
+
+            <div class="reliability-reasons">
+
+                <div class="subsection-heading">
+                    <span>
+                        RELIABILITY REASONS
+                    </span>
+                </div>
+
+                <ul>
+
+                    {% for reason in run.metadata.reliability.reasons %}
+
+                    <li>
+                        <span class="reason-bullet">
+                            !
+                        </span>
+
+                        <span>
+                            {{ reason }}
+                        </span>
+                    </li>
+
+                    {% endfor %}
+
+                </ul>
+
+            </div>
+
+            {% endif %}
+
+
+            <div class="reliability-footer">
+
+                <div>
+
+                    <span>
+                        STARTED
+                    </span>
+
+                    <strong>
+                        {{ run.started_at|date:"d M Y, h:i A" }}
+                    </strong>
+
+                </div>
+
+                <div>
+
+                    <span>
+                        COMPLETED
+                    </span>
+
+                    <strong>
+                        {% if run.completed_at %}
+                            {{ run.completed_at|date:"d M Y, h:i A" }}
+                        {% else %}
+                            —
+                        {% endif %}
+                    </strong>
+
+                </div>
+
+            </div>
+
+
+            {% else %}
+
+            <div class="no-score">
+
+                <div>
+                    ◈
+                </div>
+
+                <strong>
+                    No reliability score
+                </strong>
+
+                <p>
+                    Reliability has not been calculated for this run.
+                </p>
+
+            </div>
+
+            {% endif %}
+
+        </section>
+
+
+        <section class="panel rca-panel">
+
+            <div class="panel-header">
+
+                <div>
+
+                    <span class="section-label">
+                        ROOT CAUSE ANALYSIS
+                    </span>
+
+                    <h2>
+                        Detected Findings
+                    </h2>
+
+                    <p>
+                        Root causes identified from quality, schema,
+                        anomaly, and pipeline signals.
+                    </p>
+
+                </div>
+
+                {% if run.metadata.rca.has_findings %}
+
+                <span class="rca-count">
+                    {{ run.metadata.rca.finding_count }}
+                </span>
+
+                {% endif %}
+
+            </div>
+
+
+            {% if run.metadata.rca.has_findings %}
+
+
+            <div class="rca-summary">
+
+                <div class="rca-summary-icon">
+                    !
+                </div>
+
+                <div>
+
+                    <strong>
+                        {{ run.metadata.rca.finding_count }} Findings
+                    </strong>
+
+                    <span>
+
+                        {% for finding in run.metadata.rca.findings %}
+
+                            {% if finding.severity == "HIGH" %}
+                                <b class="summary-high">HIGH</b>
+                            {% elif finding.severity == "MEDIUM" %}
+                                <b class="summary-medium">MEDIUM</b>
+                            {% elif finding.severity == "LOW" %}
+                                <b class="summary-low">LOW</b>
+                            {% endif %}
+
+                            {% if not forloop.last %}
+                                <span class="summary-separator">·</span>
+                            {% endif %}
+
+                        {% endfor %}
+
+                    </span>
+
+                </div>
+
+            </div>
+
+
+            <div class="rca-findings-list">
+
+                {% for finding in run.metadata.rca.findings %}
+
+                <details class="rca-finding-card">
+
+                    <summary>
+
+                        <div class="finding-summary-left">
+
+                            <span class="finding-icon
+                                {% if finding.severity == 'HIGH' %}
+                                    high
+                                {% elif finding.severity == 'MEDIUM' %}
+                                    medium
+                                {% else %}
+                                    low
+                                {% endif %}
+                            ">
+                                {% if finding.severity == "HIGH" %}
+                                    !
+                                {% elif finding.severity == "MEDIUM" %}
+                                    !
+                                {% else %}
+                                    ✓
+                                {% endif %}
+                            </span>
+
+                            <div>
+
+                                <div class="finding-title-row">
+
+                                    <h3>
+                                        {{ finding.title }}
+                                    </h3>
+
+                                    <span class="severity-badge
+                                        {% if finding.severity == 'HIGH' %}
+                                            high
+                                        {% elif finding.severity == 'MEDIUM' %}
+                                            medium
+                                        {% else %}
+                                            low
+                                        {% endif %}
+                                    ">
+                                        {{ finding.severity }}
+                                    </span>
+
+                                </div>
+
+                                <span class="finding-type">
+                                    {{ finding.type }}
+                                </span>
+
+                            </div>
+
+                        </div>
+
+                        <span class="finding-chevron">
+                            +
+                        </span>
+
+                    </summary>
+
+
+                    <div class="finding-details">
+
+                        <div class="finding-section">
+
+                            <span class="finding-section-label">
+                                PRIMARY FINDING
+                            </span>
+
+                            <p>
+                                {{ finding.title }}
+                            </p>
+
+                        </div>
+
+
+                        <div class="finding-section">
+
+                            <span class="finding-section-label">
+                                ROOT CAUSE
+                            </span>
+
+                            <p>
+                                {{ finding.root_cause }}
+                            </p>
+
+                        </div>
+
+
+                        <div class="finding-section">
+
+                            <span class="finding-section-label">
+                                IMPACT
+                            </span>
+
+                            <p>
+                                {{ finding.impact }}
+                            </p>
+
+                        </div>
+
+
+                        <div class="finding-section recommendation">
+
+                            <span class="finding-section-label">
+                                RECOMMENDED ACTION
+                            </span>
+
+                            <p>
+                                {{ finding.recommendation }}
+                            </p>
+
+                        </div>
+
+
+                        {% if finding.evidence %}
+
+                        <div class="finding-evidence">
+
+                            <span class="finding-section-label">
+                                EVIDENCE
+                            </span>
+
+
+                            {% if finding.evidence.column %}
+
+                            <div class="evidence-row">
+
+                                <span>
+                                    Column
+                                </span>
+
+                                <strong>
+                                    {{ finding.evidence.column }}
+                                </strong>
+
+                            </div>
+
+                            {% endif %}
+
+
+                            {% if finding.evidence.null_count != None %}
+
+                            <div class="evidence-row">
+
+                                <span>
+                                    Null Count
+                                </span>
+
+                                <strong>
+                                    {{ finding.evidence.null_count }}
+                                </strong>
+
+                            </div>
+
+                            {% endif %}
+
+
+                            {% if finding.evidence.null_percentage != None %}
+
+                            <div class="evidence-row">
+
+                                <span>
+                                    Null Rate
+                                </span>
+
+                                <strong>
+                                    {{ finding.evidence.null_percentage }}%
+                                </strong>
+
+                            </div>
+
+                            {% endif %}
+
+
+                            {% if finding.evidence.changed_columns %}
+
+                            {% for column in finding.evidence.changed_columns %}
+
+                            <div class="evidence-row">
+
+                                <span>
+                                    {{ column.column }}
+                                </span>
+
+                                <strong>
+                                    {{ column.previous_type }}
+                                    →
+                                    {{ column.current_type }}
+                                </strong>
+
+                            </div>
+
+                            {% endfor %}
+
+                            {% endif %}
+
+                        </div>
+
+                        {% endif %}
+
+                    </div>
+
+                </details>
+
+                {% endfor %}
+
+            </div>
+
+
+            {% else %}
+
+            <div class="rca-empty">
+
+                <div class="rca-empty-icon">
+                    ✓
+                </div>
+
+                <strong>
+                    No root cause findings
+                </strong>
+
+                <p>
+                    No reliability issues were identified during this run.
+                </p>
+
+            </div>
+
+            {% endif %}
+
+        </section>
+
+    </div>
+
+
+    <section class="content-grid">
+
+
+        <section class="panel">
+
+            <div class="panel-header">
+
+                <div>
+
+                    <span class="section-label">
+                        EXECUTION
+                    </span>
+
+                    <h2>
+                        Run Information
+                    </h2>
+
+                    <p>
+                        Metadata and execution timestamps.
+                    </p>
+
+                </div>
+
+            </div>
+
+
+            <div class="run-information">
+
+                <div class="information-item">
+
+                    <span>Run ID</span>
+
+                    <strong>
+                        #{{ run.id }}
+                    </strong>
+
+                </div>
+
+
+                <div class="information-item">
+
+                    <span>Pipeline</span>
+
+                    <strong>
+                        {{ run.pipeline.name }}
+                    </strong>
+
+                </div>
+
+
+                <div class="information-item">
+
+                    <span>Dataset</span>
+
+                    <strong>
+                        {{ run.pipeline.dataset.name }}
+                    </strong>
+
+                </div>
+
+
+                <div class="information-item">
+
+                    <span>Started</span>
+
+                    <strong>
+                        {{ run.started_at|date:"d M Y, h:i A" }}
+                    </strong>
+
+                </div>
+
+
+                <div class="information-item">
+
+                    <span>Completed</span>
+
+                    <strong>
+
+                        {% if run.completed_at %}
+                            {{ run.completed_at|date:"d M Y, h:i A" }}
+                        {% else %}
+                            —
+                        {% endif %}
+
+                    </strong>
+
+                </div>
+
+
+                <div class="information-item">
+
+                    <span>Execution Status</span>
+
+                    <strong>
+                        {{ run.status }}
+                    </strong>
+
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <section class="panel score-panel">
+
+            <div class="panel-header">
+
+                <div>
+
+                    <span class="section-label">
+                        DATA QUALITY
+                    </span>
+
+                    <h2>
+                        Quality Summary
+                    </h2>
+
+                    <p>
+                        Overall result of this execution.
+                    </p>
+
+                </div>
+
+            </div>
+
+
+            {% if run.quality_score != None %}
+
+            <div class="score-container">
+
+                <div class="score-display
+                    {% if run.quality_score >= 80 %}
+                        score-good
+                    {% elif run.quality_score >= 60 %}
+                        score-warning
+                    {% else %}
+                        score-danger
+                    {% endif %}
+                ">
+
+                    <strong>
+                        {{ run.quality_score|floatformat:0 }}%
+                    </strong>
+
+                    <span>
+                        Quality
+                    </span>
+
+                </div>
+
+
+                <div class="score-breakdown">
+
+                    <div class="breakdown-item">
+
+                        <span class="breakdown-dot passed"></span>
+
+                        <div>
+
+                            <span>
+                                Passed checks
+                            </span>
+
+                            <strong>
+                                {{ passed_checks }}
+                            </strong>
+
+                        </div>
+
+                    </div>
+
+
+                    <div class="breakdown-item">
+
+                        <span class="breakdown-dot failed"></span>
+
+                        <div>
+
+                            <span>
+                                Failed checks
+                            </span>
+
+                            <strong>
+                                {{ failed_checks }}
+                            </strong>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+            {% else %}
+
+            <div class="no-score">
+
+                <div>◈</div>
+
+                <strong>
+                    No quality score
+                </strong>
+
+                <p>
+                    This run does not have a quality score yet.
+                </p>
+
+            </div>
+
+            {% endif %}
+
+        </section>
+
+    </section>
+
 
     {% if run.error_message %}
 
@@ -153,9 +1084,24 @@
         <div class="panel-header">
 
             <div>
-                <h2>Execution Error</h2>
-                <p>The pipeline encountered an error.</p>
+
+                <span class="section-label danger-label">
+                    EXECUTION ERROR
+                </span>
+
+                <h2>
+                    Pipeline Error
+                </h2>
+
+                <p>
+                    The pipeline encountered an error during execution.
+                </p>
+
             </div>
+
+            <span class="error-badge">
+                ERROR
+            </span>
 
         </div>
 
@@ -167,16 +1113,34 @@
 
     {% endif %}
 
-    <section class="panel">
+
+    <section class="panel results-panel">
 
         <div class="panel-header">
 
             <div>
-                <h2>Quality Check Results</h2>
-                <p>Results generated during this pipeline execution.</p>
+
+                <span class="section-label">
+                    QUALITY RESULTS
+                </span>
+
+                <h2>
+                    Quality Check Results
+                </h2>
+
+                <p>
+                    Results generated during this pipeline execution.
+                </p>
+
             </div>
 
+            <span class="results-count">
+                {{ results|length }}
+                checks
+            </span>
+
         </div>
+
 
         {% if results %}
 
@@ -184,31 +1148,71 @@
 
             {% for result in results %}
 
-            <div class="check-result">
+            <article
+                class="check-result
+                {% if result.passed %}
+                    check-passed
+                {% else %}
+                    check-failed
+                {% endif %}"
+            >
 
                 <div class="check-result-header">
 
-                    <div>
-                        <h3>{{ result.quality_check.name }}</h3>
+                    <div class="check-title">
 
-                        <p>
-                            {{ result.quality_check.check_type }}
+                        <div class="check-status-icon">
 
-                            {% if result.quality_check.column_name %}
-                                · {{ result.quality_check.column_name }}
+                            {% if result.passed %}
+                                ✓
+                            {% else %}
+                                !
                             {% endif %}
-                        </p>
+
+                        </div>
+
+                        <div>
+
+                            <h3>
+                                {{ result.quality_check.name }}
+                            </h3>
+
+                            <p>
+
+                                <span>
+                                    {{ result.quality_check.check_type }}
+                                </span>
+
+                                {% if result.quality_check.column_name %}
+
+                                <span class="separator">
+                                    ·
+                                </span>
+
+                                <span>
+                                    {{ result.quality_check.column_name }}
+                                </span>
+
+                                {% endif %}
+
+                            </p>
+
+                        </div>
+
                     </div>
+
 
                     {% if result.passed %}
 
                     <span class="result-badge passed">
+                        <span class="status-dot"></span>
                         PASSED
                     </span>
 
                     {% else %}
 
                     <span class="result-badge failed">
+                        <span class="status-dot"></span>
                         FAILED
                     </span>
 
@@ -216,71 +1220,189 @@
 
                 </div>
 
+
+                <div class="pass-rate-section">
+
+                    <div class="pass-rate-header">
+
+                        <span>
+                            Pass Rate
+                        </span>
+
+                        <strong>
+                            {{ result.pass_rate|floatformat:2 }}%
+                        </strong>
+
+                    </div>
+
+
+                    <div class="progress-track">
+
+                        {% if result.pass_rate >= 90 %}
+
+                            <span class="progress-fill progress-90"></span>
+
+                        {% elif result.pass_rate >= 75 %}
+
+                            <span class="progress-fill progress-75"></span>
+
+                        {% elif result.pass_rate >= 50 %}
+
+                            <span class="progress-fill progress-50"></span>
+
+                        {% elif result.pass_rate > 0 %}
+
+                            <span class="progress-fill progress-25"></span>
+
+                        {% else %}
+
+                            <span class="progress-fill progress-0"></span>
+
+                        {% endif %}
+
+                    </div>
+
+                </div>
+
+
                 <div class="check-stats">
 
                     <div>
-                        <span>Rows Checked</span>
-                        <strong>{{ result.rows_checked }}</strong>
+
+                        <span>
+                            Rows Checked
+                        </span>
+
+                        <strong>
+                            {{ result.rows_checked }}
+                        </strong>
+
                     </div>
 
-                    <div>
-                        <span>Rows Passed</span>
-                        <strong>{{ result.rows_passed }}</strong>
-                    </div>
 
                     <div>
-                        <span>Rows Failed</span>
-                        <strong>{{ result.rows_failed }}</strong>
+
+                        <span>
+                            Rows Passed
+                        </span>
+
+                        <strong class="success-value">
+                            {{ result.rows_passed }}
+                        </strong>
+
                     </div>
 
+
                     <div>
-                        <span>Pass Rate</span>
-                        <strong>{{ result.pass_rate|floatformat:2 }}%</strong>
+
+                        <span>
+                            Rows Failed
+                        </span>
+
+                        <strong class="danger-value">
+                            {{ result.rows_failed }}
+                        </strong>
+
                     </div>
 
                 </div>
+
 
                 {% if result.details %}
 
-                <div class="check-details">
-                    <strong>Details</strong>
-                    <p>{{ result.details }}</p>
-                </div>
+                <details class="check-details">
+
+                    <summary>
+                        <span>
+                            View check details
+                        </span>
+
+                        <span>
+                            +
+                        </span>
+
+                    </summary>
+
+                    <div class="details-content">
+                        {{ result.details }}
+                    </div>
+
+                </details>
 
                 {% endif %}
 
-                {% if result.issues.all %}
 
-                <div class="issues-section">
+                {% with issues=result.issues.all %}
 
-                    <h4>Issues</h4>
+                    {% if issues %}
 
-                    {% for issue in result.issues.all %}
+                    <div class="issues-section">
 
-                    <div class="issue-item">
+                        <div class="issues-heading">
 
-                        <div>
-                            <strong>{{ issue.title }}</strong>
+                            <div>
 
-                            {% if issue.description %}
-                            <p>{{ issue.description }}</p>
-                            {% endif %}
+                                <span class="issue-icon">
+                                    !
+                                </span>
+
+                                <h4>
+                                    Issues Detected
+                                </h4>
+
+                            </div>
+
+                            <span>
+                                {{ issues|length }}
+                            </span>
+
                         </div>
 
-                        <div class="issue-meta">
-                            <span>{{ issue.severity }}</span>
-                            <span>{{ issue.status }}</span>
+
+                        {% for issue in issues %}
+
+                        <div class="issue-item">
+
+                            <div class="issue-content">
+
+                                <strong>
+                                    {{ issue.title }}
+                                </strong>
+
+                                {% if issue.description %}
+
+                                <p>
+                                    {{ issue.description }}
+                                </p>
+
+                                {% endif %}
+
+                            </div>
+
+
+                            <div class="issue-meta">
+
+                                <span class="severity">
+                                    {{ issue.severity }}
+                                </span>
+
+                                <span class="issue-status">
+                                    {{ issue.status }}
+                                </span>
+
+                            </div>
+
                         </div>
+
+                        {% endfor %}
 
                     </div>
 
-                    {% endfor %}
+                    {% endif %}
 
-                </div>
+                {% endwith %}
 
-                {% endif %}
-
-            </div>
+            </article>
 
             {% endfor %}
 
@@ -289,14 +1411,27 @@
         {% else %}
 
         <div class="empty-state">
-            No quality check results were recorded for this run.
+
+            <div class="empty-icon">
+                ✓
+            </div>
+
+            <h3>
+                No quality results
+            </h3>
+
+            <p>
+                No quality check results were recorded for this run.
+            </p>
+
         </div>
 
         {% endif %}
 
     </section>
 
-</section>
+
+</main>
 
 {% endif %}
 

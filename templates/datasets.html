@@ -199,6 +199,26 @@
                         CSV
                     </option>
 
+                    <option value="json">
+                        JSON
+                    </option>
+
+                    <option value="excel">
+                        Excel
+                    </option>
+
+                    <option value="parquet">
+                        Parquet
+                    </option>
+
+                    <option value="tsv">
+                        TSV
+                    </option>
+
+                    <option value="xml">
+                        XML
+                    </option>
+
                     <option value="database">
                         Database
                     </option>
@@ -269,7 +289,7 @@
                     <article
                         class="dataset-card"
                         data-name="{{ dataset.name|lower }}"
-                        data-source="{{ dataset.data_source.source_type|lower }}"
+                        data-source="{% if dataset.file_format and dataset.file_format != 'UNKNOWN' %}{{ dataset.file_format|lower }}{% elif dataset.data_source %}{{ dataset.data_source.source_type|lower }}{% else %}unknown{% endif %}"
                         data-status="{% if dataset.is_active %}active{% else %}inactive{% endif %}"
                     >
 
@@ -278,21 +298,50 @@
                             <div class="dataset-source">
 
                                 <div class="source-icon">
-                                    {% if dataset.data_source.source_type == "CSV" %}
+
+                                    {% if dataset.file_format == "CSV" %}
                                         CSV
-                                    {% elif dataset.data_source.source_type == "DATABASE" %}
+
+                                    {% elif dataset.file_format == "JSON" %}
+                                        JSON
+
+                                    {% elif dataset.file_format == "EXCEL" %}
+                                        XLS
+
+                                    {% elif dataset.file_format == "PARQUET" %}
+                                        PQ
+
+                                    {% elif dataset.file_format == "TSV" %}
+                                        TSV
+
+                                    {% elif dataset.file_format == "XML" %}
+                                        XML
+
+                                    {% elif dataset.data_source and dataset.data_source.source_type == "DATABASE" %}
                                         DB
-                                    {% elif dataset.data_source.source_type == "URL" %}
+
+                                    {% elif dataset.data_source and dataset.data_source.source_type == "URL" %}
                                         URL
+
                                     {% else %}
                                         DS
+
                                     {% endif %}
+
                                 </div>
 
                                 <div class="dataset-source-info">
 
                                     <span class="source-label">
-                                        {{ dataset.data_source.source_type|default:"Unknown" }}
+
+                                        {% if dataset.file_format and dataset.file_format != "UNKNOWN" %}
+                                            {{ dataset.file_format }}
+                                        {% elif dataset.data_source %}
+                                            {{ dataset.data_source.source_type|default:"Unknown" }}
+                                        {% else %}
+                                            Unknown
+                                        {% endif %}
+
                                     </span>
 
                                     <span class="dataset-status {% if dataset.is_active %}active{% else %}inactive{% endif %}">
@@ -317,11 +366,13 @@
                             </h3>
 
                             <p class="dataset-description">
+
                                 {% if dataset.description %}
                                     {{ dataset.description }}
                                 {% else %}
                                     No description provided.
                                 {% endif %}
+
                             </p>
 
 
@@ -388,6 +439,7 @@
                             <span class="dataset-updated">
 
                                 Updated
+
                                 {% if dataset.updated_at %}
                                     {{ dataset.updated_at|date:"M d, Y" }}
                                 {% else %}
@@ -489,7 +541,7 @@
                     </h2>
 
                     <p>
-                        Upload a CSV dataset to DataSentinel.
+                        Upload a dataset to DataSentinel.
                     </p>
 
                 </div>
@@ -558,7 +610,7 @@
                     <div class="form-group">
 
                         <label for="datasetFile">
-                            CSV file
+                            Dataset file
                         </label>
 
                         <label
@@ -573,11 +625,11 @@
                             <span class="file-upload-content">
 
                                 <strong>
-                                    Choose CSV file
+                                    Choose dataset file
                                 </strong>
 
                                 <small>
-                                    CSV files up to your configured limit
+                                    CSV, JSON, Excel, Parquet, TSV, or XML
                                 </small>
 
                             </span>
@@ -593,7 +645,7 @@
                             type="file"
                             id="datasetFile"
                             name="file"
-                            accept=".csv,text/csv"
+                            accept=".csv,.json,.xlsx,.xls,.parquet,.tsv,.xml"
                             required
                             hidden
                         >

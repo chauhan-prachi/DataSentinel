@@ -27,16 +27,12 @@ def login_view(request):
             user = None
 
             try:
-                existing_user = User.objects.get(
-                    email__iexact=email
-                )
-
+                existing_user = User.objects.get(email__iexact=email)
                 user = authenticate(
                     request,
                     username=existing_user.username,
                     password=password,
                 )
-
             except User.DoesNotExist:
                 user = None
 
@@ -46,25 +42,21 @@ def login_view(request):
                     user,
                     backend="django.contrib.auth.backends.ModelBackend",
                 )
-
+                messages.success(
+                    request,
+                    f"Welcome back, {user.first_name or user.username}!",
+                )
                 next_url = request.GET.get("next")
-
                 if next_url:
                     return redirect(next_url)
-
                 return redirect("dashboard_page")
 
-            form.add_error(
-                None,
-                "Invalid email or password.",
-            )
+            form.add_error(None, "Invalid email or password.")
 
     return render(
         request,
         "accounts/login.html",
-        {
-            "form": form,
-        },
+        {"form": form},
     )
 
 
@@ -85,36 +77,33 @@ def signup_view(request):
                 password=password,
             )
 
-            UserSettings.objects.create(
-                user=user
-            )
+            UserSettings.objects.create(user=user)
 
             login(
                 request,
                 user,
                 backend="django.contrib.auth.backends.ModelBackend",
             )
-
             messages.success(
                 request,
                 "Your DataSentinel account has been created successfully.",
             )
-
             return redirect("dashboard_page")
 
     return render(
         request,
         "accounts/signup.html",
-        {
-            "form": form,
-        },
+        {"form": form},
     )
 
 
 def logout_view(request):
     if request.method == "POST":
         logout(request)
-
+        messages.success(
+            request,
+            "You have been logged out successfully.",
+        )
     return redirect("login")
 
 
@@ -122,28 +111,21 @@ def profile_view(request):
     if not request.user.is_authenticated:
         return redirect("login")
 
-    form = ProfileForm(
-        request.POST or None,
-        instance=request.user,
-    )
+    form = ProfileForm(request.POST or None, instance=request.user)
 
     if request.method == "POST":
         if form.is_valid():
             form.save()
-
             messages.success(
                 request,
                 "Your profile has been updated successfully.",
             )
-
             return redirect("profile")
 
     return render(
         request,
         "accounts/profile.html",
-        {
-            "form": form,
-        },
+        {"form": form},
     )
 
 
@@ -151,52 +133,32 @@ def settings_view(request):
     if not request.user.is_authenticated:
         return redirect("login")
 
-    settings_obj, created = UserSettings.objects.get_or_create(
-        user=request.user
-    )
+    settings_obj, created = UserSettings.objects.get_or_create(user=request.user)
 
-    settings_form = SettingsForm(
-        request.POST or None,
-        instance=settings_obj,
-    )
-
-    password_form = DataSentinelPasswordChangeForm(
-        request.user
-    )
+    settings_form = SettingsForm(request.POST or None, instance=settings_obj)
+    password_form = DataSentinelPasswordChangeForm(request.user)
 
     if request.method == "POST":
         action = request.POST.get("action")
 
         if action == "save_settings":
-            settings_form = SettingsForm(
-                request.POST,
-                instance=settings_obj,
-            )
-
+            settings_form = SettingsForm(request.POST, instance=settings_obj)
             if settings_form.is_valid():
                 settings_form.save()
-
                 messages.success(
                     request,
                     "Your settings have been saved successfully.",
                 )
-
                 return redirect("settings")
 
         elif action == "change_password":
-            password_form = DataSentinelPasswordChangeForm(
-                request.user,
-                request.POST,
-            )
-
+            password_form = DataSentinelPasswordChangeForm(request.user, request.POST)
             if password_form.is_valid():
                 password_form.save()
-
                 messages.success(
                     request,
                     "Your password has been changed successfully.",
                 )
-
                 return redirect("settings")
 
     return render(

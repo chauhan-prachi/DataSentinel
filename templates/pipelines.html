@@ -6,69 +6,403 @@
 {% block pipelines_active %}active{% endblock %}
 
 {% block extra_css %}
-
 <link rel="stylesheet" href="{% static 'css/pipelines.css' %}">
 {% endblock %}
 
 {% block content %}
 
-<header class="topbar">
+<div class="pipelines-page">
+
+    <header class="topbar">
+        <div>
+            <h1>Pipelines</h1>
+            <p>Manage, monitor, and execute your data quality pipelines.</p>
+        </div>
+
+        <div class="topbar-actions">
+
+            <a
+                href="{% url 'pipelines_page' %}"
+                class="refresh-btn"
+            >
+                ↻ <span>Refresh</span>
+            </a>
+
+            <button
+                type="button"
+                class="primary-btn create-pipeline-btn"
+                id="openCreatePipelineModal"
+            >
+                + Create Pipeline
+            </button>
+
+        </div>
+    </header>
 
 
-<div>
-    <h1>Pipelines</h1>
-    <p>Manage and execute your data quality pipelines.</p>
+    <section class="page-content">
+
+        <div class="page-toolbar">
+
+            <div>
+                <h2>Quality Pipelines</h2>
+
+                <p>
+                    {{ pipelines|length }}
+                    configured pipeline{{ pipelines|length|pluralize }}
+                </p>
+            </div>
+
+        </div>
+
+
+        {% if pipelines %}
+
+            <div class="cards-grid">
+
+                {% for pipeline in pipelines %}
+
+                    <article class="pipeline-card">
+
+                        <div class="pipeline-card-header">
+
+                            <div>
+                                <h3>{{ pipeline.name }}</h3>
+
+                                {% if pipeline.description %}
+                                    <p>{{ pipeline.description }}</p>
+                                {% else %}
+                                    <p class="muted-text">
+                                        No description provided.
+                                    </p>
+                                {% endif %}
+                            </div>
+
+                            <span class="status-badge {{ pipeline.status|lower }}">
+                                {{ pipeline.status }}
+                            </span>
+
+                        </div>
+
+
+                        <div class="pipeline-stats">
+
+                            <div class="stat-item">
+                                <span class="stat-label">
+                                    Dataset
+                                </span>
+
+                                <strong>
+                                    {{ pipeline.dataset.name }}
+                                </strong>
+                            </div>
+
+
+                            <div class="stat-item">
+                                <span class="stat-label">
+                                    Runs
+                                </span>
+
+                                <strong>
+                                    {{ pipeline.run_count }}
+                                </strong>
+                            </div>
+
+
+                            <div class="stat-item">
+                                <span class="stat-label">
+                                    Last Run
+                                </span>
+
+                                <strong>
+                                    {% if pipeline.last_run_at %}
+                                        {{ pipeline.last_run_at|date:"d M, Y H:i" }}
+                                    {% else %}
+                                        —
+                                    {% endif %}
+                                </strong>
+                            </div>
+
+
+                            <div class="stat-item">
+                                <span class="stat-label">
+                                    Quality Score
+                                </span>
+
+                                <strong>
+                                    {% if pipeline.average_quality != None %}
+                                        {{ pipeline.average_quality|floatformat:1 }}%
+                                    {% else %}
+                                        —
+                                    {% endif %}
+                                </strong>
+                            </div>
+
+                        </div>
+
+
+                        <div class="pipeline-card-footer">
+
+                            <a
+                                href="{% url 'pipeline_detail_page' pipeline.id %}"
+                                class="secondary-btn"
+                            >
+                                View Details
+                            </a>
+
+
+                            {% if pipeline.status == "ACTIVE" %}
+
+                                <form
+                                    method="post"
+                                    action="{% url 'run_quality_checks' pipeline.id %}"
+                                >
+
+                                    {% csrf_token %}
+
+                                    <button
+                                        type="submit"
+                                        class="primary-btn"
+                                    >
+                                        Run Pipeline
+                                    </button>
+
+                                </form>
+
+                            {% endif %}
+
+                        </div>
+
+                    </article>
+
+                {% endfor %}
+
+            </div>
+
+
+        {% else %}
+
+            <div class="empty-state">
+
+                <div class="empty-icon">⌁</div>
+
+                <h3>No pipelines yet</h3>
+
+                {% if datasets %}
+
+                    <p>
+                        Create a data quality pipeline and connect it
+                        to one of your datasets.
+                    </p>
+
+                    <button
+                        type="button"
+                        class="primary-btn"
+                        id="openCreatePipelineEmpty"
+                    >
+                        + Create Your First Pipeline
+                    </button>
+
+                {% else %}
+
+                    <p>
+                        You need to add a dataset before creating
+                        a pipeline.
+                    </p>
+
+                    <a
+                        href="{% url 'datasets_page' %}"
+                        class="primary-btn"
+                    >
+                        + Add Dataset
+                    </a>
+
+                {% endif %}
+
+            </div>
+
+        {% endif %}
+
+    </section>
+
 </div>
 
-<div class="topbar-actions">
-    <button id="refreshPipelines" class="refresh-btn">
-        ↻ <span>Refresh</span>
-    </button>
-</div>
+
+<div
+    class="modal-overlay"
+    id="createPipelineModal"
+    aria-hidden="true"
+>
+
+    <div
+        class="modal-card"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="createPipelineTitle"
+    >
+
+        <div class="modal-header">
+
+            <div>
+                <h2 id="createPipelineTitle">
+                    Create Pipeline
+                </h2>
+
+                <p>
+                    Configure a data quality pipeline for your dataset.
+                </p>
+            </div>
+
+            <button
+                type="button"
+                class="modal-close"
+                id="closeCreatePipelineModal"
+                aria-label="Close"
+            >
+                ×
+            </button>
+
+        </div>
 
 
-</header>
+        <form
+            method="post"
+            action="{% url 'create_pipeline' %}"
+            class="pipeline-form"
+        >
 
-<section class="page-content">
+            {% csrf_token %}
 
 
-<div class="page-toolbar">
+            <div class="form-group">
 
-    <div>
-        <h2>Quality Pipelines</h2>
-        <p>Configured DataSentinel pipelines</p>
+                <label for="pipelineName">
+                    Pipeline Name
+                </label>
+
+                <input
+                    type="text"
+                    id="pipelineName"
+                    name="name"
+                    placeholder="Example: Customer Data Quality Pipeline"
+                    maxlength="150"
+                    required
+                >
+
+            </div>
+
+
+            <div class="form-group">
+
+                <label for="pipelineDataset">
+                    Dataset
+                </label>
+
+                <select
+                    id="pipelineDataset"
+                    name="dataset_id"
+                    required
+                >
+
+                    <option value="">
+                        Select a dataset
+                    </option>
+
+                    {% for dataset in datasets %}
+
+                        <option value="{{ dataset.id }}">
+                            {{ dataset.name }}
+                            ({{ dataset.row_count }} rows)
+                        </option>
+
+                    {% endfor %}
+
+                </select>
+
+            </div>
+
+
+            <div class="form-group">
+
+                <label for="pipelineDescription">
+                    Description
+                    <span class="optional-label">
+                        Optional
+                    </span>
+                </label>
+
+                <textarea
+                    id="pipelineDescription"
+                    name="description"
+                    rows="4"
+                    placeholder="Describe what this pipeline monitors..."
+                ></textarea>
+
+            </div>
+
+
+            <div class="form-group">
+
+                <label for="pipelineSchedule">
+                    Schedule
+                    <span class="optional-label">
+                        Optional
+                    </span>
+                </label>
+
+                <select
+                    id="pipelineSchedule"
+                    name="schedule"
+                >
+
+                    <option value="">
+                        Manual execution
+                    </option>
+
+                    <option value="HOURLY">
+                        Every hour
+                    </option>
+
+                    <option value="DAILY">
+                        Daily
+                    </option>
+
+                    <option value="WEEKLY">
+                        Weekly
+                    </option>
+
+                </select>
+
+            </div>
+
+
+            <div class="modal-actions">
+
+                <button
+                    type="button"
+                    class="secondary-btn"
+                    id="cancelCreatePipeline"
+                >
+                    Cancel
+                </button>
+
+                <button
+                    type="submit"
+                    class="primary-btn"
+                >
+                    Create Pipeline
+                </button>
+
+            </div>
+
+        </form>
+
     </div>
 
-    <button id="createPipelineButton" class="primary-btn">
-        + Create Pipeline
-    </button>
-
 </div>
-
-<div id="pipelinesLoading" class="loading-state">
-    Loading pipelines...
-</div>
-
-<div id="pipelinesContainer" class="cards-grid hidden"></div>
-
-<div id="pipelinesError" class="error-state hidden">
-
-    <div class="error-icon">!</div>
-
-    <h3>Unable to load pipelines</h3>
-
-    <p>Something went wrong while loading pipelines.</p>
-
-    <button onclick="loadPipelines()">
-        Try Again
-    </button>
-
-</div>
-
-
-</section>
 
 {% endblock %}
+
 
 {% block extra_js %}
 

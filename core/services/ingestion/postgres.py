@@ -7,12 +7,10 @@ from django.db import connections
 
 
 class PostgreSQLConnector:
-    
     def __init__(self, database: str = "default"):
         self.database = database
 
     def _validate_table_name(self, table_name: str) -> None:
-        
         if not table_name:
             raise ValueError(
                 "table_name is required."
@@ -28,7 +26,6 @@ class PostgreSQLConnector:
 
     def table_exists(self, table_name: str) -> bool:
         """Return True if the table exists in the public schema."""
-
         self._validate_table_name(table_name)
 
         with connections[self.database].cursor() as cursor:
@@ -53,7 +50,6 @@ class PostgreSQLConnector:
         """
         Load an entire PostgreSQL table into a pandas DataFrame.
         """
-
         self._validate_table_name(table_name)
 
         if not self.table_exists(table_name):
@@ -86,7 +82,6 @@ class PostgreSQLConnector:
         """
         Execute a read-only SQL query and return a DataFrame.
         """
-
         if not query:
             raise ValueError(
                 "query is required."

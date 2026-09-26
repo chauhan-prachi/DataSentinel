@@ -50,7 +50,6 @@ class SchemaDetector:
         dataframe: pd.DataFrame,
     ) -> list[dict]:
         """Detect the semantic type of every column."""
-
         results = []
 
         for column in dataframe.columns:
@@ -81,6 +80,17 @@ class SchemaDetector:
                     "Column contains no non-null values."
                 ),
             }
+
+        if self._contains_complex_values(non_null):
+            return self._result(
+                column_name,
+                "STRING",
+                0.70,
+                (
+                    "Column contains nested or complex "
+                    "JSON values."
+                ),
+            )
 
         if pd.api.types.is_bool_dtype(series):
             return self._result(
@@ -269,7 +279,6 @@ class SchemaDetector:
         series: pd.Series,
     ) -> bool:
         ratio = self._email_valid_ratio(series)
-
         return ratio >= 0.90
 
     def _email_valid_ratio(
@@ -330,6 +339,14 @@ class SchemaDetector:
         column_name: str,
         series: pd.Series,
     ) -> bool:
+        non_null = series.dropna()
+
+        if non_null.empty:
+            return False
+
+        if self._contains_complex_values(non_null):
+            return False
+
         normalized_name = (
             column_name
             .lower()
@@ -347,11 +364,6 @@ class SchemaDetector:
         )
 
         if not name_suggests_identifier:
-            return False
-
-        non_null = series.dropna()
-
-        if non_null.empty:
             return False
 
         uniqueness_ratio = (
@@ -372,6 +384,9 @@ class SchemaDetector:
         if non_null.empty:
             return False
 
+        if self._contains_complex_values(non_null):
+            return False
+
         unique_ratio = (
             non_null.nunique()
             / len(non_null)
@@ -382,6 +397,17 @@ class SchemaDetector:
             and non_null.nunique() <= 50
             and unique_ratio <= 0.20
         )
+
+    @staticmethod
+    def _contains_complex_values(
+        series: pd.Series,
+    ) -> bool:
+        """Return True when a series contains nested JSON values."""
+        for value in series:
+            if isinstance(value, (dict, list, tuple, set)):
+                return True
+
+        return False
 
     @staticmethod
     def _confidence_from_ratio(
