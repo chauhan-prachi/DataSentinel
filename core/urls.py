@@ -1,23 +1,13 @@
 from django.shortcuts import redirect
 from django.urls import path
-
 from core import views
-
-
-def home(request):
-
-    if request.user.is_authenticated:
-        return redirect("dashboard_page")
-
-    return redirect("landing_page")
-
 
 urlpatterns = [
 
     path(
         "",
-        home,
-        name="home",
+        views.landing_page,
+        name="landing_page",
     ),
 
     path(
