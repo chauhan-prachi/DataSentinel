@@ -6,6 +6,7 @@
 {% block dashboard_active %}active{% endblock %}
 
 {% block extra_css %}
+
 <link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
 {% endblock %}
 
@@ -13,922 +14,1345 @@
 
 <div class="dashboard-page">
 
-    <header class="topbar">
-        <div class="topbar-heading">
-            <span class="eyebrow">Data Reliability</span>
-            <h1>Dashboard</h1>
+
+<header class="topbar">
+
+    <div class="topbar-heading">
+
+        <span class="eyebrow">
+            Data Reliability
+        </span>
+
+        <h1>
+            Dashboard
+        </h1>
+
+        <p>
+            Monitor your data quality, pipelines, and reliability.
+        </p>
+
+    </div>
+
+    <div class="topbar-actions">
+
+        <a
+            href="{% url 'datasets_page' %}"
+            class="btn btn-secondary"
+        >
+            Datasets
+        </a>
+
+        <a
+            href="{% url 'create_pipeline' %}"
+            class="btn btn-primary"
+        >
+            + Create
+        </a>
+
+        <a href="{% url 'dashboard_page' %}" class="refresh-button">
+    ↻ Refresh
+</a>
+
+    </div>
+
+</header>
+
+
+{% if dashboard_state != "active" %}
+
+<section class="welcome-panel">
+
+    <div class="welcome-content">
+
+        <span class="eyebrow">
+            Getting Started
+        </span>
+
+        {% if dashboard_state == "new" %}
+
+            <h2>
+                Welcome to DataSentinel 👋
+            </h2>
+
             <p>
-                Monitor your data quality, pipelines, and reliability.
+                Let's connect your first dataset and start monitoring
+                your data quality.
             </p>
-        </div>
 
-        <div class="topbar-actions">
-            <a href="{% url 'datasets_page' %}" class="btn btn-secondary">
-                Datasets
+        {% elif dashboard_state == "dataset_added" %}
+
+            <h2>
+                Your dataset is connected 🎉
+            </h2>
+
+            <p>
+                Your data is connected. The next step is to create a
+                pipeline that will monitor it.
+            </p>
+
+        {% elif dashboard_state == "pipeline_created" %}
+
+            <h2>
+                Your pipeline is ready 🚀
+            </h2>
+
+            <p>
+                Your pipeline is configured. Run your first quality check
+                to start detecting data issues.
+            </p>
+
+        {% endif %}
+
+    </div>
+
+    <div class="welcome-action">
+
+        {% if dashboard_state == "new" %}
+
+            <a
+                href="{% url 'datasets_page' %}"
+                class="btn btn-primary"
+            >
+                Add Dataset
             </a>
 
-            <a href="{% url 'create_pipeline' %}" class="btn btn-primary">
-                + Create
+        {% elif dashboard_state == "dataset_added" %}
+
+            <a
+                href="{% url 'create_pipeline' %}"
+                class="btn btn-primary"
+            >
+                Create Pipeline
             </a>
 
-            <a href="{% url 'dashboard_page' %}" class="refresh-button">
-                ↻ Refresh
-            </a>
-        </div>
-    </header>
+        {% elif dashboard_state == "pipeline_created" %}
 
-    {% if dashboard_state != "active" %}
+            {% if pipelines %}
 
-    <section class="welcome-panel">
-
-        <div class="welcome-content">
-
-            <span class="eyebrow">Getting Started</span>
-
-            {% if dashboard_state == "new" %}
-
-                <h2>Welcome to DataSentinel 👋</h2>
-
-                <p>
-                    Let's connect your first dataset and start monitoring
-                    your data quality.
-                </p>
-
-            {% elif dashboard_state == "dataset_added" %}
-
-                <h2>Your dataset is connected 🎉</h2>
-
-                <p>
-                    Your data is connected. The next step is to create a
-                    pipeline that will monitor it.
-                </p>
-
-            {% elif dashboard_state == "pipeline_created" %}
-
-                <h2>Your pipeline is ready 🚀</h2>
-
-                <p>
-                    Your pipeline is configured. Run your first quality check
-                    to start detecting data issues.
-                </p>
+                <a
+                    href="{% url 'pipeline_detail_page' pipelines.0.id %}"
+                    class="btn btn-primary"
+                >
+                    Run Pipeline
+                </a>
 
             {% endif %}
 
+        {% endif %}
+
+    </div>
+
+</section>
+
+
+<section class="getting-started panel">
+
+    <div class="section-heading">
+
+        <div>
+
+            <span class="eyebrow">
+                Setup
+            </span>
+
+            <h2>
+                Get DataSentinel running
+            </h2>
+
+            <p>
+                Complete each step to start monitoring your data.
+            </p>
+
         </div>
 
-        <div class="welcome-action">
+        <span class="progress-label">
+            Step {{ getting_started_step }} of 4
+        </span>
 
-            {% if dashboard_state == "new" %}
+    </div>
 
-                <a href="{% url 'datasets_page' %}" class="btn btn-primary">
-                    Add Dataset
-                </a>
 
-            {% elif dashboard_state == "dataset_added" %}
+    <div class="setup-steps">
 
-                <a href="{% url 'create_pipeline' %}" class="btn btn-primary">
-                    Create Pipeline
-                </a>
 
-            {% elif dashboard_state == "pipeline_created" %}
+        <div
+            class="setup-step
+            {% if getting_started_step > 1 %}
+                completed
+            {% elif getting_started_step == 1 %}
+                current
+            {% else %}
+                locked
+            {% endif %}"
+        >
 
-                {% if pipelines %}
+            <div class="step-number">
+
+                {% if getting_started_step > 1 %}
+                    ✓
+                {% else %}
+                    1
+                {% endif %}
+
+            </div>
+
+            <div class="step-content">
+
+                <span class="step-label">
+                    Step 1
+                </span>
+
+                <h3>
+                    Add your first dataset
+                </h3>
+
+                <p>
+                    Connect a CSV dataset and let DataSentinel profile
+                    your data.
+                </p>
+
+                {% if getting_started_step == 1 %}
+
+                    <a
+                        href="{% url 'datasets_page' %}"
+                        class="step-action"
+                    >
+                        Add Dataset →
+                    </a>
+
+                {% endif %}
+
+            </div>
+
+        </div>
+
+
+        <div
+            class="setup-step
+            {% if getting_started_step > 2 %}
+                completed
+            {% elif getting_started_step == 2 %}
+                current
+            {% else %}
+                locked
+            {% endif %}"
+        >
+
+            <div class="step-number">
+
+                {% if getting_started_step > 2 %}
+                    ✓
+                {% else %}
+                    2
+                {% endif %}
+
+            </div>
+
+            <div class="step-content">
+
+                <span class="step-label">
+                    Step 2
+                </span>
+
+                <h3>
+                    Create your first pipeline
+                </h3>
+
+                <p>
+                    Configure a pipeline to continuously monitor your
+                    connected dataset.
+                </p>
+
+                {% if getting_started_step == 2 %}
+
+                    <a
+                        href="{% url 'create_pipeline' %}"
+                        class="step-action"
+                    >
+                        Create Pipeline →
+                    </a>
+
+                {% endif %}
+
+            </div>
+
+        </div>
+
+
+        <div
+            class="setup-step
+            {% if getting_started_step > 3 %}
+                completed
+            {% elif getting_started_step == 3 %}
+                current
+            {% else %}
+                locked
+            {% endif %}"
+        >
+
+            <div class="step-number">
+
+                {% if getting_started_step > 3 %}
+                    ✓
+                {% else %}
+                    3
+                {% endif %}
+
+            </div>
+
+            <div class="step-content">
+
+                <span class="step-label">
+                    Step 3
+                </span>
+
+                <h3>
+                    Run your first quality check
+                </h3>
+
+                <p>
+                    Execute your pipeline and evaluate the quality of
+                    your dataset.
+                </p>
+
+                {% if getting_started_step == 3 and pipelines %}
 
                     <a
                         href="{% url 'pipeline_detail_page' pipelines.0.id %}"
-                        class="btn btn-primary"
+                        class="step-action"
                     >
-                        Run Pipeline
+                        Run Pipeline →
                     </a>
 
                 {% endif %}
 
-            {% endif %}
-
-        </div>
-
-    </section>
-
-    <section class="getting-started panel">
-
-        <div class="section-heading">
-
-            <div>
-                <span class="eyebrow">Setup</span>
-
-                <h2>Get DataSentinel running</h2>
-
-                <p>
-                    Complete each step to start monitoring your data.
-                </p>
-            </div>
-
-            <span class="progress-label">
-                Step {{ getting_started_step }} of 4
-            </span>
-
-        </div>
-
-        <div class="setup-steps">
-
-            <div class="setup-step {% if getting_started_step > 1 %}completed{% elif getting_started_step == 1 %}current{% else %}locked{% endif %}">
-
-                <div class="step-number">
-
-                    {% if getting_started_step > 1 %}
-                        ✓
-                    {% else %}
-                        1
-                    {% endif %}
-
-                </div>
-
-                <div class="step-content">
-
-                    <span class="step-label">Step 1</span>
-
-                    <h3>Add your first dataset</h3>
-
-                    <p>
-                        Connect a CSV dataset and let DataSentinel profile
-                        your data.
-                    </p>
-
-                    {% if getting_started_step == 1 %}
-
-                        <a
-                            href="{% url 'datasets_page' %}"
-                            class="step-action"
-                        >
-                            Add Dataset →
-                        </a>
-
-                    {% endif %}
-
-                </div>
-
-            </div>
-
-            <div class="setup-step {% if getting_started_step > 2 %}completed{% elif getting_started_step == 2 %}current{% else %}locked{% endif %}">
-
-                <div class="step-number">
-
-                    {% if getting_started_step > 2 %}
-                        ✓
-                    {% else %}
-                        2
-                    {% endif %}
-
-                </div>
-
-                <div class="step-content">
-
-                    <span class="step-label">Step 2</span>
-
-                    <h3>Create your first pipeline</h3>
-
-                    <p>
-                        Configure a pipeline to continuously monitor your
-                        connected dataset.
-                    </p>
-
-                    {% if getting_started_step == 2 %}
-
-                        <a
-                            href="{% url 'create_pipeline' %}"
-                            class="step-action"
-                        >
-                            Create Pipeline →
-                        </a>
-
-                    {% endif %}
-
-                </div>
-
-            </div>
-
-            <div class="setup-step {% if getting_started_step > 3 %}completed{% elif getting_started_step == 3 %}current{% else %}locked{% endif %}">
-
-                <div class="step-number">
-
-                    {% if getting_started_step > 3 %}
-                        ✓
-                    {% else %}
-                        3
-                    {% endif %}
-
-                </div>
-
-                <div class="step-content">
-
-                    <span class="step-label">Step 3</span>
-
-                    <h3>Run your first quality check</h3>
-
-                    <p>
-                        Execute your pipeline and evaluate the quality of
-                        your dataset.
-                    </p>
-
-                    {% if getting_started_step == 3 and pipelines %}
-
-                        <a
-                            href="{% url 'pipeline_detail_page' pipelines.0.id %}"
-                            class="step-action"
-                        >
-                            Run Pipeline →
-                        </a>
-
-                    {% endif %}
-
-                </div>
-
-            </div>
-
-            <div class="setup-step {% if getting_started_step >= 4 %}current{% else %}locked{% endif %}">
-
-                <div class="step-number">
-                    4
-                </div>
-
-                <div class="step-content">
-
-                    <span class="step-label">Step 4</span>
-
-                    <h3>Review detected issues</h3>
-
-                    <p>
-                        Investigate failures, understand their impact, and
-                        resolve data quality issues.
-                    </p>
-
-                    {% if getting_started_step >= 4 %}
-
-                        <a
-                            href="{% url 'issues_page' %}"
-                            class="step-action"
-                        >
-                            Review Issues →
-                        </a>
-
-                    {% endif %}
-
-                </div>
-
             </div>
 
         </div>
 
-    </section>
 
-    <section class="workflow-panel panel">
+        <div
+            class="setup-step
+            {% if getting_started_step >= 4 %}
+                current
+            {% else %}
+                locked
+            {% endif %}"
+        >
 
-        <div class="section-heading">
-
-            <div>
-
-                <span class="eyebrow">How it works</span>
-
-                <h2>From raw data to reliable data</h2>
-
-                <p>
-                    DataSentinel turns your datasets into continuously
-                    monitored data pipelines.
-                </p>
-
+            <div class="step-number">
+                4
             </div>
 
-        </div>
+            <div class="step-content">
 
-        <div class="workflow">
-
-            <div class="workflow-item">
-                <div class="workflow-icon">01</div>
-                <h3>Connect</h3>
-                <p>Connect your dataset to DataSentinel.</p>
-            </div>
-
-            <div class="workflow-line"></div>
-
-            <div class="workflow-item">
-                <div class="workflow-icon">02</div>
-                <h3>Profile</h3>
-                <p>Understand schema, columns, and data patterns.</p>
-            </div>
-
-            <div class="workflow-line"></div>
-
-            <div class="workflow-item">
-                <div class="workflow-icon">03</div>
-                <h3>Monitor</h3>
-                <p>Run automated quality checks on your data.</p>
-            </div>
-
-            <div class="workflow-line"></div>
-
-            <div class="workflow-item">
-                <div class="workflow-icon">04</div>
-                <h3>Detect</h3>
-                <p>Identify failures and unusual data behavior.</p>
-            </div>
-
-            <div class="workflow-line"></div>
-
-            <div class="workflow-item">
-                <div class="workflow-icon">05</div>
-                <h3>Explain</h3>
-                <p>Understand what caused a data quality problem.</p>
-            </div>
-
-            <div class="workflow-line"></div>
-
-            <div class="workflow-item">
-                <div class="workflow-icon">06</div>
-                <h3>Resolve</h3>
-                <p>Track and resolve issues before they affect users.</p>
-            </div>
-
-        </div>
-
-    </section>
-
-    {% endif %}
-
-    <section class="metrics-grid">
-
-        <div class="metric-card">
-
-            <div class="metric-header">
-                <span class="metric-label">Datasets</span>
-                <span class="metric-icon">▦</span>
-            </div>
-
-            <div class="metric-value">
-                {{ total_datasets }}
-            </div>
-
-            <span class="metric-description">
-                Connected data sources
-            </span>
-
-        </div>
-
-        <div class="metric-card">
-
-            <div class="metric-header">
-                <span class="metric-label">Pipelines</span>
-                <span class="metric-icon">◇</span>
-            </div>
-
-            <div class="metric-value">
-                {{ total_pipelines }}
-            </div>
-
-            <span class="metric-description">
-                Monitoring pipelines
-            </span>
-
-        </div>
-
-        <div class="metric-card">
-
-            <div class="metric-header">
-                <span class="metric-label">Pipeline Runs</span>
-                <span class="metric-icon">↻</span>
-            </div>
-
-            <div class="metric-value">
-                {{ total_runs }}
-            </div>
-
-            <span class="metric-description">
-                Total executions
-            </span>
-
-        </div>
-
-        <div class="metric-card">
-
-            <div class="metric-header">
-                <span class="metric-label">Open Issues</span>
-                <span class="metric-icon">!</span>
-            </div>
-
-            <div class="metric-value {% if open_issues > 0 %}metric-warning{% endif %}">
-                {{ open_issues }}
-            </div>
-
-            <span class="metric-description">
-                Issues requiring attention
-            </span>
-
-        </div>
-
-        <div class="metric-card">
-
-            <div class="metric-header">
-                <span class="metric-label">Average Quality</span>
-                <span class="metric-icon">◔</span>
-            </div>
-
-            <div class="metric-value">
-
-                {% if average_quality is not None %}
-                    {{ average_quality }}%
-                {% else %}
-                    —
-                {% endif %}
-
-            </div>
-
-            <span class="metric-description">
-                Across pipeline runs
-            </span>
-
-        </div>
-
-    </section>
-
-    {% if total_runs > 0 %}
-
-    <section class="dashboard-grid">
-
-        <div class="panel latest-run-panel">
-
-            <div class="panel-header">
-
-                <div>
-                    <span class="eyebrow">Latest Execution</span>
-                    <h2>Latest Pipeline Run</h2>
-                </div>
-
-                {% if latest_run %}
-
-                    <span class="status-badge status-{{ latest_run.status|lower }}">
-                        {{ latest_run.get_status_display }}
-                    </span>
-
-                {% endif %}
-
-            </div>
-
-            {% if latest_run %}
-
-            <div class="latest-run-content">
-
-                <div class="run-main">
-
-                    <span class="run-label">Pipeline</span>
-
-                    <a
-                        href="{% url 'pipeline_detail_page' latest_run.pipeline.id %}"
-                        class="run-pipeline"
-                    >
-                        {{ latest_run.pipeline.name }}
-                    </a>
-
-                    <span class="run-dataset">
-                        {{ latest_run.pipeline.dataset.name }}
-                    </span>
-
-                </div>
-
-                <div class="run-stat">
-
-                    <span class="run-label">Rows Processed</span>
-
-                    <strong>
-                        {{ latest_run.rows_processed|default:"0" }}
-                    </strong>
-
-                </div>
-
-                <div class="run-stat">
-
-                    <span class="run-label">Quality Score</span>
-
-                    {% if latest_run.quality_score is not None %}
-
-                        <strong class="score {% if latest_run.quality_score >= 80 %}good{% elif latest_run.quality_score >= 50 %}medium{% else %}bad{% endif %}">
-                            {{ latest_run.quality_score }}%
-                        </strong>
-
-                    {% else %}
-
-                        <strong>—</strong>
-
-                    {% endif %}
-
-                </div>
-
-                <div class="run-stat">
-
-                    <span class="run-label">Started</span>
-
-                    <strong>
-                        {{ latest_run.started_at|date:"M d, Y" }}
-                    </strong>
-
-                    <span class="run-time">
-                        {{ latest_run.started_at|date:"H:i" }}
-                    </span>
-
-                </div>
-
-            </div>
-
-            {% if latest_run.error_message %}
-
-                <div class="run-error">
-                    {{ latest_run.error_message }}
-                </div>
-
-            {% endif %}
-
-            {% endif %}
-
-        </div>
-
-        <div class="panel quality-overview-panel">
-
-            <div class="panel-header">
-
-                <div>
-                    <span class="eyebrow">Quality</span>
-                    <h2>Quality Overview</h2>
-                </div>
-
-            </div>
-
-            <div class="quality-overview">
-
-                <div class="quality-score">
-
-                    <div
-                        class="quality-circle"
-                        style="--quality: {{ quality_percentage }}%;"
-                    >
-
-                        <div class="quality-circle-inner">
-
-                            <strong>
-                                {{ quality_percentage }}%
-                            </strong>
-
-                            <span>
-                                Pass Rate
-                            </span>
-
-                        </div>
-
-                    </div>
-
-                </div>
-
-                <div class="quality-stats">
-
-                    <div class="quality-stat">
-
-                        <span class="quality-dot passed"></span>
-
-                        <div>
-                            <strong>{{ passed_checks }}</strong>
-                            <span>Passed Checks</span>
-                        </div>
-
-                    </div>
-
-                    <div class="quality-stat">
-
-                        <span class="quality-dot failed"></span>
-
-                        <div>
-                            <strong>{{ failed_checks }}</strong>
-                            <span>Failed Checks</span>
-                        </div>
-
-                    </div>
-
-                    <div class="quality-stat">
-
-                        <span class="quality-dot issues"></span>
-
-                        <div>
-                            <strong>{{ open_issues }}</strong>
-                            <span>Open Issues</span>
-                        </div>
-
-                    </div>
-
-                </div>
-
-            </div>
-
-        </div>
-
-    </section>
-
-    <section class="analytics-grid">
-
-        <div class="panel chart-panel">
-
-            <div class="panel-header">
-
-                <div>
-
-                    <span class="eyebrow">Analytics</span>
-
-                    <h2>Quality Score Trend</h2>
-
-                    <p>
-                        Recent pipeline quality performance.
-                    </p>
-
-                </div>
-
-            </div>
-
-            <div class="chart-container">
-                <canvas id="qualityTrendChart"></canvas>
-            </div>
-
-        </div>
-
-        <div class="panel chart-panel">
-
-            <div class="panel-header">
-
-                <div>
-
-                    <span class="eyebrow">Checks</span>
-
-                    <h2>Check Results</h2>
-
-                    <p>
-                        Passed versus failed quality checks.
-                    </p>
-
-                </div>
-
-            </div>
-
-            <div class="chart-container chart-container-small">
-                <canvas id="checkResultsChart"></canvas>
-            </div>
-
-        </div>
-
-    </section>
-
-    <section class="dashboard-grid secondary-grid">
-
-        <div class="panel">
-
-            <div class="panel-header">
-
-                <div>
-
-                    <span class="eyebrow">Monitoring</span>
-
-                    <h2>Pipeline Health</h2>
-
-                    <p>
-                        Current health of your monitored pipelines.
-                    </p>
-
-                </div>
-
-                <span class="panel-count">
-                    {{ total_pipelines }}
+                <span class="step-label">
+                    Step 4
                 </span>
 
-            </div>
-
-            {% if pipeline_health %}
-
-            <div class="pipeline-health-list">
-
-                {% for item in pipeline_health %}
-
-                <div class="pipeline-health-item">
-
-                    <div class="pipeline-health-main">
-
-                        <div class="pipeline-health-name">
-
-                            <a
-                                href="{% url 'pipeline_detail_page' item.pipeline.id %}"
-                            >
-                                {{ item.pipeline.name }}
-                            </a>
-
-                            <span class="pipeline-health-dataset">
-                                {{ item.pipeline.dataset.name }}
-                            </span>
-
-                        </div>
-
-                        <span class="health-badge health-{{ item.health_status|lower }}">
-
-                            {% if item.health_status == "NO_RUN" %}
-                                No Run
-                            {% elif item.health_status == "RUNNING" %}
-                                Running
-                            {% elif item.health_status == "FAILED" %}
-                                Failed
-                            {% elif item.health_status == "CRITICAL" %}
-                                Critical
-                            {% elif item.health_status == "WARNING" %}
-                                Warning
-                            {% else %}
-                                Healthy
-                            {% endif %}
-
-                        </span>
-
-                    </div>
-
-                    {% if item.latest_run and item.latest_run.quality_score is not None %}
-
-                    <div class="health-score">
-
-                        <div
-                            class="health-progress"
-                            style="--quality: {{ item.latest_run.quality_score }}%;"
-                        >
-                            <span></span>
-                        </div>
-
-                        <strong>
-                            {{ item.latest_run.quality_score }}%
-                        </strong>
-
-                    </div>
-
-                    {% else %}
-
-                    <div class="health-score no-score">
-                        <span>No quality score yet</span>
-                    </div>
-
-                    {% endif %}
-
-                </div>
-
-                {% endfor %}
-
-            </div>
-
-            {% else %}
-
-            <div class="empty-state">
-
-                <div class="empty-icon">
-                    ◇
-                </div>
-
-                <h3>No pipelines yet</h3>
+                <h3>
+                    Review detected issues
+                </h3>
 
                 <p>
-                    Create a pipeline to start monitoring your datasets.
+                    Investigate failures, understand their impact, and
+                    resolve data quality issues.
                 </p>
 
-                <a
-                    href="{% url 'create_pipeline' %}"
-                    class="btn btn-primary"
-                >
-                    Create Pipeline
-                </a>
+                {% if getting_started_step >= 4 %}
+
+                    <a
+                        href="{% url 'issues_page' %}"
+                        class="step-action"
+                    >
+                        Review Issues →
+                    </a>
+
+                {% endif %}
 
             </div>
 
+        </div>
+
+    </div>
+
+</section>
+
+
+<section class="workflow-panel panel">
+
+    <div class="section-heading">
+
+        <div>
+
+            <span class="eyebrow">
+                How it works
+            </span>
+
+            <h2>
+                From raw data to reliable data
+            </h2>
+
+            <p>
+                DataSentinel turns your datasets into continuously
+                monitored data pipelines.
+            </p>
+
+        </div>
+
+    </div>
+
+
+    <div class="workflow">
+
+
+        <div class="workflow-item">
+
+            <div class="workflow-icon">
+                01
+            </div>
+
+            <h3>
+                Connect
+            </h3>
+
+            <p>
+                Connect your dataset to DataSentinel.
+            </p>
+
+        </div>
+
+
+        <div class="workflow-line"></div>
+
+
+        <div class="workflow-item">
+
+            <div class="workflow-icon">
+                02
+            </div>
+
+            <h3>
+                Profile
+            </h3>
+
+            <p>
+                Understand schema, columns, and data patterns.
+            </p>
+
+        </div>
+
+
+        <div class="workflow-line"></div>
+
+
+        <div class="workflow-item">
+
+            <div class="workflow-icon">
+                03
+            </div>
+
+            <h3>
+                Monitor
+            </h3>
+
+            <p>
+                Run automated quality checks on your data.
+            </p>
+
+        </div>
+
+
+        <div class="workflow-line"></div>
+
+
+        <div class="workflow-item">
+
+            <div class="workflow-icon">
+                04
+            </div>
+
+            <h3>
+                Detect
+            </h3>
+
+            <p>
+                Identify failures and unusual data behavior.
+            </p>
+
+        </div>
+
+
+        <div class="workflow-line"></div>
+
+
+        <div class="workflow-item">
+
+            <div class="workflow-icon">
+                05
+            </div>
+
+            <h3>
+                Explain
+            </h3>
+
+            <p>
+                Understand what caused a data quality problem.
+            </p>
+
+        </div>
+
+
+        <div class="workflow-line"></div>
+
+
+        <div class="workflow-item">
+
+            <div class="workflow-icon">
+                06
+            </div>
+
+            <h3>
+                Resolve
+            </h3>
+
+            <p>
+                Track and resolve issues before they affect users.
+            </p>
+
+        </div>
+
+    </div>
+
+</section>
+
+{% endif %}
+
+
+<section class="metrics-grid">
+
+
+    <div class="metric-card">
+
+        <div class="metric-header">
+
+            <span class="metric-label">
+                Datasets
+            </span>
+
+            <span class="metric-icon">
+                ▦
+            </span>
+
+        </div>
+
+        <div class="metric-value">
+            {{ total_datasets }}
+        </div>
+
+        <span class="metric-description">
+            Connected data sources
+        </span>
+
+    </div>
+
+
+    <div class="metric-card">
+
+        <div class="metric-header">
+
+            <span class="metric-label">
+                Pipelines
+            </span>
+
+            <span class="metric-icon">
+                ◇
+            </span>
+
+        </div>
+
+        <div class="metric-value">
+            {{ total_pipelines }}
+        </div>
+
+        <span class="metric-description">
+            Monitoring pipelines
+        </span>
+
+    </div>
+
+
+    <div class="metric-card">
+
+        <div class="metric-header">
+
+            <span class="metric-label">
+                Pipeline Runs
+            </span>
+
+            <span class="metric-icon">
+                ↻
+            </span>
+
+        </div>
+
+        <div class="metric-value">
+            {{ total_runs }}
+        </div>
+
+        <span class="metric-description">
+            Total executions
+        </span>
+
+    </div>
+
+
+    <div class="metric-card">
+
+        <div class="metric-header">
+
+            <span class="metric-label">
+                Open Issues
+            </span>
+
+            <span class="metric-icon">
+                !
+            </span>
+
+        </div>
+
+        <div
+            class="metric-value
+            {% if open_issues > 0 %}
+                metric-warning
+            {% endif %}"
+        >
+            {{ open_issues }}
+        </div>
+
+        <span class="metric-description">
+            Issues requiring attention
+        </span>
+
+    </div>
+
+
+    <div class="metric-card">
+
+        <div class="metric-header">
+
+            <span class="metric-label">
+                Average Quality
+            </span>
+
+            <span class="metric-icon">
+                ◔
+            </span>
+
+        </div>
+
+        <div class="metric-value">
+
+            {% if average_quality is not None %}
+                {{ average_quality }}%
+            {% else %}
+                —
             {% endif %}
 
         </div>
 
-        <div class="panel">
+        <span class="metric-description">
+            Across pipeline runs
+        </span>
 
-            <div class="panel-header">
+    </div>
 
-                <div>
+</section>
 
-                    <span class="eyebrow">Issues</span>
 
-                    <h2>Issue Overview</h2>
+<section class="reliability-section">
 
-                    <p>
-                        Current data quality issues by severity.
-                    </p>
-
-                </div>
-
-                <a
-                    href="{% url 'issues_page' %}"
-                    class="view-all"
-                >
-                    View All →
-                </a>
-
-            </div>
-
-            <div class="issue-summary">
-
-                <div class="issue-total">
-
-                    <span class="issue-total-label">
-                        Open Issues
-                    </span>
-
-                    <strong>
-                        {{ open_issues }}
-                    </strong>
-
-                </div>
-
-                <div class="severity-list">
-
-                    <div class="severity-item">
-
-                        <span class="severity-indicator critical"></span>
-
-                        <span>
-                            Critical
-                        </span>
-
-                        <strong>
-                            {{ issue_severity.critical }}
-                        </strong>
-
-                    </div>
-
-                    <div class="severity-item">
-
-                        <span class="severity-indicator high"></span>
-
-                        <span>
-                            High
-                        </span>
-
-                        <strong>
-                            {{ issue_severity.high }}
-                        </strong>
-
-                    </div>
-
-                    <div class="severity-item">
-
-                        <span class="severity-indicator medium"></span>
-
-                        <span>
-                            Medium
-                        </span>
-
-                        <strong>
-                            {{ issue_severity.medium }}
-                        </strong>
-
-                    </div>
-
-                    <div class="severity-item">
-
-                        <span class="severity-indicator low"></span>
-
-                        <span>
-                            Low
-                        </span>
-
-                        <strong>
-                            {{ issue_severity.low }}
-                        </strong>
-
-                    </div>
-
-                </div>
-
-            </div>
-
-        </div>
-
-    </section>
-
-    <section class="panel recent-runs-panel">
+    <div class="panel reliability-pulse-panel">
 
         <div class="panel-header">
 
             <div>
 
-                <span class="eyebrow">Activity</span>
+                <span class="eyebrow">
+                    Reliability Engine
+                </span>
 
-                <h2>Recent Pipeline Runs</h2>
+                <h2>
+                    Platform Reliability
+                </h2>
 
                 <p>
-                    Latest executions across your monitored pipelines.
+                    Current reliability across quality, schema,
+                    anomalies, and pipeline execution.
+                </p>
+
+            </div>
+
+            <span
+                id="reliabilityStatus"
+                class="reliability-status-badge"
+            >
+                —
+            </span>
+
+        </div>
+
+
+        <div class="reliability-pulse">
+
+
+            <div class="reliability-score-ring">
+
+                <div class="reliability-ring">
+
+                    <div class="reliability-ring-inner">
+
+                        <strong id="reliabilityScore">
+                            —
+                        </strong>
+
+                        <span>
+                            Reliability
+                        </span>
+
+                    </div>
+
+                </div>
+
+
+                <div class="reliability-grade">
+
+                    Grade
+
+                    <strong id="reliabilityGrade">
+                        —
+                    </strong>
+
+                </div>
+
+            </div>
+
+
+            <div class="reliability-breakdown">
+
+
+                <div class="reliability-component">
+
+                    <div class="component-heading">
+
+                        <span>
+                            Quality
+                        </span>
+
+                        <strong id="qualityReliabilityScore">
+                            —
+                        </strong>
+
+                    </div>
+
+                    <div class="component-bar">
+
+                        <span
+                            id="qualityReliabilityBar"
+                        ></span>
+
+                    </div>
+
+                </div>
+
+
+                <div class="reliability-component">
+
+                    <div class="component-heading">
+
+                        <span>
+                            Schema Stability
+                        </span>
+
+                        <strong id="schemaReliabilityScore">
+                            —
+                        </strong>
+
+                    </div>
+
+                    <div class="component-bar">
+
+                        <span
+                            id="schemaReliabilityBar"
+                        ></span>
+
+                    </div>
+
+                </div>
+
+
+                <div class="reliability-component">
+
+                    <div class="component-heading">
+
+                        <span>
+                            Anomaly Health
+                        </span>
+
+                        <strong id="anomalyReliabilityScore">
+                            —
+                        </strong>
+
+                    </div>
+
+                    <div class="component-bar">
+
+                        <span
+                            id="anomalyReliabilityBar"
+                        ></span>
+
+                    </div>
+
+                </div>
+
+
+                <div class="reliability-component">
+
+                    <div class="component-heading">
+
+                        <span>
+                            Pipeline Stability
+                        </span>
+
+                        <strong id="pipelineReliabilityScore">
+                            —
+                        </strong>
+
+                    </div>
+
+                    <div class="component-bar">
+
+                        <span
+                            id="pipelineReliabilityBar"
+                        ></span>
+
+                    </div>
+
+                </div>
+
+
+            </div>
+
+        </div>
+
+    </div>
+
+</section>
+
+
+{% if total_runs > 0 %}
+
+
+<section class="dashboard-grid">
+
+
+    <div class="panel latest-run-panel">
+
+        <div class="panel-header">
+
+            <div>
+
+                <span class="eyebrow">
+                    Latest Execution
+                </span>
+
+                <h2>
+                    Latest Pipeline Run
+                </h2>
+
+            </div>
+
+            {% if latest_run %}
+
+                <span
+                    class="status-badge status-{{ latest_run.status|lower }}"
+                >
+                    {{ latest_run.get_status_display }}
+                </span>
+
+            {% endif %}
+
+        </div>
+
+
+        {% if latest_run %}
+
+        <div class="latest-run-content">
+
+
+            <div class="run-main">
+
+                <span class="run-label">
+                    Pipeline
+                </span>
+
+                <a
+                    href="{% url 'pipeline_detail_page' latest_run.pipeline.id %}"
+                    class="run-pipeline"
+                >
+                    {{ latest_run.pipeline.name }}
+                </a>
+
+                <span class="run-dataset">
+                    {{ latest_run.pipeline.dataset.name }}
+                </span>
+
+            </div>
+
+
+            <div class="run-stat">
+
+                <span class="run-label">
+                    Rows Processed
+                </span>
+
+                <strong>
+                    {{ latest_run.rows_processed|default:"0" }}
+                </strong>
+
+            </div>
+
+
+            <div class="run-stat">
+
+                <span class="run-label">
+                    Quality Score
+                </span>
+
+                {% if latest_run.quality_score is not None %}
+
+                    <strong
+                        class="score
+                        {% if latest_run.quality_score >= 80 %}
+                            good
+                        {% elif latest_run.quality_score >= 50 %}
+                            medium
+                        {% else %}
+                            bad
+                        {% endif %}"
+                    >
+                        {{ latest_run.quality_score }}%
+                    </strong>
+
+                {% else %}
+
+                    <strong>
+                        —
+                    </strong>
+
+                {% endif %}
+
+            </div>
+
+
+            <div class="run-stat">
+
+                <span class="run-label">
+                    Started
+                </span>
+
+                <strong>
+                    {{ latest_run.started_at|date:"M d, Y" }}
+                </strong>
+
+                <span class="run-time">
+                    {{ latest_run.started_at|date:"H:i" }}
+                </span>
+
+            </div>
+
+
+        </div>
+
+
+        {% if latest_run.error_message %}
+
+            <div class="run-error">
+                {{ latest_run.error_message }}
+            </div>
+
+        {% endif %}
+
+        {% endif %}
+
+    </div>
+
+
+    <div class="panel quality-overview-panel">
+
+        <div class="panel-header">
+
+            <div>
+
+                <span class="eyebrow">
+                    Quality
+                </span>
+
+                <h2>
+                    Quality Overview
+                </h2>
+
+            </div>
+
+        </div>
+
+
+        <div class="quality-overview">
+
+
+            <div class="quality-score">
+
+                <div
+                    class="quality-circle"
+                    style="--quality: {{ quality_percentage }}%;"
+                >
+
+                    <div class="quality-circle-inner">
+
+                        <strong>
+                            {{ quality_percentage }}%
+                        </strong>
+
+                        <span>
+                            Pass Rate
+                        </span>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <div class="quality-stats">
+
+
+                <div class="quality-stat">
+
+                    <span class="quality-dot passed"></span>
+
+                    <div>
+
+                        <strong>
+                            {{ passed_checks }}
+                        </strong>
+
+                        <span>
+                            Passed Checks
+                        </span>
+
+                    </div>
+
+                </div>
+
+
+                <div class="quality-stat">
+
+                    <span class="quality-dot failed"></span>
+
+                    <div>
+
+                        <strong>
+                            {{ failed_checks }}
+                        </strong>
+
+                        <span>
+                            Failed Checks
+                        </span>
+
+                    </div>
+
+                </div>
+
+
+                <div class="quality-stat">
+
+                    <span class="quality-dot issues"></span>
+
+                    <div>
+
+                        <strong>
+                            {{ open_issues }}
+                        </strong>
+
+                        <span>
+                            Open Issues
+                        </span>
+
+                    </div>
+
+                </div>
+
+
+            </div>
+
+        </div>
+
+    </div>
+
+</section>
+
+
+<section class="analytics-grid">
+
+
+    <div class="panel chart-panel">
+
+        <div class="panel-header">
+
+            <div>
+
+                <span class="eyebrow">
+                    Analytics
+                </span>
+
+                <h2>
+                    Quality Score Trend
+                </h2>
+
+                <p>
+                    Recent pipeline quality performance.
+                </p>
+
+            </div>
+
+        </div>
+
+
+        <div class="chart-container">
+
+            <canvas id="qualityTrendChart"></canvas>
+
+        </div>
+
+    </div>
+
+
+    <div class="panel chart-panel">
+
+        <div class="panel-header">
+
+            <div>
+
+                <span class="eyebrow">
+                    Checks
+                </span>
+
+                <h2>
+                    Check Results
+                </h2>
+
+                <p>
+                    Passed versus failed quality checks.
+                </p>
+
+            </div>
+
+        </div>
+
+
+        <div class="chart-container chart-container-small">
+
+            <canvas id="checkResultsChart"></canvas>
+
+        </div>
+
+    </div>
+
+</section>
+
+
+<section class="dashboard-grid secondary-grid">
+
+
+    <div class="panel">
+
+        <div class="panel-header">
+
+            <div>
+
+                <span class="eyebrow">
+                    Monitoring
+                </span>
+
+                <h2>
+                    Pipeline Health
+                </h2>
+
+                <p>
+                    Current health of your monitored pipelines.
+                </p>
+
+            </div>
+
+            <span class="panel-count">
+                {{ total_pipelines }}
+            </span>
+
+        </div>
+
+
+        {% if pipeline_health %}
+
+        <div class="pipeline-health-list">
+
+
+            {% for item in pipeline_health %}
+
+            <div class="pipeline-health-item">
+
+
+                <div class="pipeline-health-main">
+
+                    <div class="pipeline-health-name">
+
+                        <a
+                            href="{% url 'pipeline_detail_page' item.pipeline.id %}"
+                        >
+                            {{ item.pipeline.name }}
+                        </a>
+
+                        <span class="pipeline-health-dataset">
+                            {{ item.pipeline.dataset.name }}
+                        </span>
+
+                    </div>
+
+
+                    <span
+                        class="health-badge health-{{ item.health_status|lower }}"
+                    >
+
+                        {% if item.health_status == "NO_RUN" %}
+
+                            No Run
+
+                        {% elif item.health_status == "RUNNING" %}
+
+                            Running
+
+                        {% elif item.health_status == "FAILED" %}
+
+                            Failed
+
+                        {% elif item.health_status == "CRITICAL" %}
+
+                            Critical
+
+                        {% elif item.health_status == "WARNING" %}
+
+                            Warning
+
+                        {% else %}
+
+                            Healthy
+
+                        {% endif %}
+
+                    </span>
+
+                </div>
+
+
+                {% if item.latest_run and item.latest_run.quality_score is not None %}
+
+                <div class="health-score">
+
+                    <div
+                        class="health-progress"
+                        style="--quality: {{ item.latest_run.quality_score }}%;"
+                    >
+                        <span></span>
+                    </div>
+
+                    <strong>
+                        {{ item.latest_run.quality_score }}%
+                    </strong>
+
+                </div>
+
+                {% else %}
+
+                <div class="health-score no-score">
+
+                    <span>
+                        No quality score yet
+                    </span>
+
+                </div>
+
+                {% endif %}
+
+
+            </div>
+
+            {% endfor %}
+
+        </div>
+
+
+        {% else %}
+
+        <div class="empty-state">
+
+            <div class="empty-icon">
+                ◇
+            </div>
+
+            <h3>
+                No pipelines yet
+            </h3>
+
+            <p>
+                Create a pipeline to start monitoring your datasets.
+            </p>
+
+            <a
+                href="{% url 'create_pipeline' %}"
+                class="btn btn-primary"
+            >
+                Create Pipeline
+            </a>
+
+        </div>
+
+        {% endif %}
+
+    </div>
+
+
+    <div class="panel">
+
+        <div class="panel-header">
+
+            <div>
+
+                <span class="eyebrow">
+                    Issues
+                </span>
+
+                <h2>
+                    Issue Overview
+                </h2>
+
+                <p>
+                    Current data quality issues by severity.
                 </p>
 
             </div>
 
             <a
-                href="{% url 'runs_page' %}"
+                href="{% url 'issues_page' %}"
                 class="view-all"
             >
                 View All →
@@ -936,167 +1360,381 @@
 
         </div>
 
-        {% if recent_runs %}
 
-        <div class="table-wrapper">
+        <div class="issue-summary">
 
-            <table class="data-table">
 
-                <thead>
+            <div class="issue-total">
 
-                    <tr>
-                        <th>Run</th>
-                        <th>Pipeline</th>
-                        <th>Dataset</th>
-                        <th>Status</th>
-                        <th>Rows</th>
-                        <th>Quality</th>
-                        <th>Started</th>
-                    </tr>
+                <span class="issue-total-label">
+                    Open Issues
+                </span>
 
-                </thead>
+                <strong>
+                    {{ open_issues }}
+                </strong>
 
-                <tbody>
+            </div>
 
-                    {% for run in recent_runs %}
 
-                    <tr>
+            <div class="severity-list">
 
-                        <td>
 
-                            <span class="run-id">
-                                #{{ run.id }}
-                            </span>
+                <div class="severity-item">
 
-                        </td>
+                    <span class="severity-indicator critical"></span>
 
-                        <td>
+                    <span>
+                        Critical
+                    </span>
 
-                            <a
-                                href="{% url 'pipeline_detail_page' run.pipeline.id %}"
-                                class="table-link"
-                            >
-                                {{ run.pipeline.name }}
-                            </a>
+                    <strong>
+                        {{ issue_severity.critical }}
+                    </strong>
 
-                        </td>
+                </div>
 
-                        <td>
 
-                            <span class="dataset-name">
-                                {{ run.pipeline.dataset.name }}
-                            </span>
+                <div class="severity-item">
 
-                        </td>
+                    <span class="severity-indicator high"></span>
 
-                        <td>
+                    <span>
+                        High
+                    </span>
 
-                            <span class="status-badge status-{{ run.status|lower }}">
-                                {{ run.get_status_display }}
-                            </span>
+                    <strong>
+                        {{ issue_severity.high }}
+                    </strong>
 
-                        </td>
+                </div>
 
-                        <td>
-                            {{ run.rows_processed|default:"0" }}
-                        </td>
 
-                        <td>
+                <div class="severity-item">
 
-                            {% if run.quality_score is not None %}
+                    <span class="severity-indicator medium"></span>
 
-                                <span class="score {% if run.quality_score >= 80 %}good{% elif run.quality_score >= 50 %}medium{% else %}bad{% endif %}">
-                                    {{ run.quality_score }}%
-                                </span>
+                    <span>
+                        Medium
+                    </span>
 
-                            {% else %}
+                    <strong>
+                        {{ issue_severity.medium }}
+                    </strong>
 
-                                <span class="score-empty">
-                                    —
-                                </span>
+                </div>
 
-                            {% endif %}
 
-                        </td>
+                <div class="severity-item">
 
-                        <td>
+                    <span class="severity-indicator low"></span>
 
-                            <span class="date-primary">
-                                {{ run.started_at|date:"M d, Y" }}
-                            </span>
+                    <span>
+                        Low
+                    </span>
 
-                            <span class="date-secondary">
-                                {{ run.started_at|date:"H:i" }}
-                            </span>
+                    <strong>
+                        {{ issue_severity.low }}
+                    </strong>
 
-                        </td>
+                </div>
 
-                    </tr>
 
-                    {% endfor %}
-
-                </tbody>
-
-            </table>
+            </div>
 
         </div>
 
-        {% else %}
+    </div>
 
-        <div class="empty-state">
+</section>
 
-            <div class="empty-icon">
-                ↻
-            </div>
 
-            <h3>No pipeline runs yet</h3>
+<section class="panel incidents-panel">
 
-            <p>
-                Run a pipeline to begin collecting quality and reliability
-                metrics.
-            </p>
+    <div class="panel-header">
 
-        </div>
-
-        {% endif %}
-
-    </section>
-
-    {% else %}
-
-    <section class="empty-dashboard panel">
-
-        <div class="empty-dashboard-content">
-
-            <div class="empty-dashboard-icon">
-                ◈
-            </div>
+        <div>
 
             <span class="eyebrow">
-                Ready to begin
+                Attention Required
             </span>
 
             <h2>
-                Your data reliability workspace starts here
+                Active Incidents
             </h2>
 
             <p>
-                Connect a dataset to begin profiling your data, configure
-                quality checks, and monitor pipeline health.
+                Alerts currently affecting your data platform.
             </p>
-
-            <a
-                href="{% url 'datasets_page' %}"
-                class="btn btn-primary"
-            >
-                Add Your First Dataset
-            </a>
 
         </div>
 
-    </section>
+        <a
+            href="{% url 'alerts_page' %}"
+            class="view-all"
+        >
+            View All →
+        </a>
+
+    </div>
+
+
+    <div
+        id="dashboardIncidents"
+        class="dashboard-incidents"
+    >
+
+        <div class="incident-loading">
+            Loading active incidents...
+        </div>
+
+    </div>
+
+</section>
+
+
+<section class="panel recent-runs-panel">
+
+    <div class="panel-header">
+
+        <div>
+
+            <span class="eyebrow">
+                Activity
+            </span>
+
+            <h2>
+                Recent Pipeline Runs
+            </h2>
+
+            <p>
+                Latest executions across your monitored pipelines.
+            </p>
+
+        </div>
+
+        <a
+            href="{% url 'runs_page' %}"
+            class="view-all"
+        >
+            View All →
+        </a>
+
+    </div>
+
+
+    {% if recent_runs %}
+
+    <div class="table-wrapper">
+
+        <table class="data-table">
+
+            <thead>
+
+                <tr>
+
+                    <th>
+                        Run
+                    </th>
+
+                    <th>
+                        Pipeline
+                    </th>
+
+                    <th>
+                        Dataset
+                    </th>
+
+                    <th>
+                        Status
+                    </th>
+
+                    <th>
+                        Rows
+                    </th>
+
+                    <th>
+                        Quality
+                    </th>
+
+                    <th>
+                        Started
+                    </th>
+
+                </tr>
+
+            </thead>
+
+
+            <tbody>
+
+
+                {% for run in recent_runs %}
+
+                <tr>
+
+
+                    <td>
+
+                        <span class="run-id">
+                            #{{ run.id }}
+                        </span>
+
+                    </td>
+
+
+                    <td>
+
+                        <a
+                            href="{% url 'pipeline_detail_page' run.pipeline.id %}"
+                            class="table-link"
+                        >
+                            {{ run.pipeline.name }}
+                        </a>
+
+                    </td>
+
+
+                    <td>
+
+                        <span class="dataset-name">
+                            {{ run.pipeline.dataset.name }}
+                        </span>
+
+                    </td>
+
+
+                    <td>
+
+                        <span
+                            class="status-badge status-{{ run.status|lower }}"
+                        >
+                            {{ run.get_status_display }}
+                        </span>
+
+                    </td>
+
+
+                    <td>
+                        {{ run.rows_processed|default:"0" }}
+                    </td>
+
+
+                    <td>
+
+                        {% if run.quality_score is not None %}
+
+                            <span
+                                class="score
+                                {% if run.quality_score >= 80 %}
+                                    good
+                                {% elif run.quality_score >= 50 %}
+                                    medium
+                                {% else %}
+                                    bad
+                                {% endif %}"
+                            >
+                                {{ run.quality_score }}%
+                            </span>
+
+                        {% else %}
+
+                            <span class="score-empty">
+                                —
+                            </span>
+
+                        {% endif %}
+
+                    </td>
+
+
+                    <td>
+
+                        <span class="date-primary">
+                            {{ run.started_at|date:"M d, Y" }}
+                        </span>
+
+                        <span class="date-secondary">
+                            {{ run.started_at|date:"H:i" }}
+                        </span>
+
+                    </td>
+
+
+                </tr>
+
+                {% endfor %}
+
+
+            </tbody>
+
+        </table>
+
+    </div>
+
+
+    {% else %}
+
+    <div class="empty-state">
+
+        <div class="empty-icon">
+            ↻
+        </div>
+
+        <h3>
+            No pipeline runs yet
+        </h3>
+
+        <p>
+            Run a pipeline to begin collecting quality and reliability
+            metrics.
+        </p>
+
+    </div>
 
     {% endif %}
+
+</section>
+
+
+{% else %}
+
+
+<section class="empty-dashboard panel">
+
+    <div class="empty-dashboard-content">
+
+        <div class="empty-dashboard-icon">
+            ◈
+        </div>
+
+        <span class="eyebrow">
+            Ready to begin
+        </span>
+
+        <h2>
+            Your data reliability workspace starts here
+        </h2>
+
+        <p>
+            Connect a dataset to begin profiling your data, configure
+            quality checks, and monitor pipeline health.
+        </p>
+
+        <a
+            href="{% url 'datasets_page' %}"
+            class="btn btn-primary"
+        >
+            Add Your First Dataset
+        </a>
+
+    </div>
+
+</section>
+
+
+{% endif %}
+
 
 </div>
 
@@ -1104,10 +1742,6 @@
 {% block extra_js %}
 
 {% if total_runs > 0 %}
-
-{{ quality_trend_data|json_script:"quality-trend-data" }}
-{{ passed_checks|json_script:"passed-checks-data" }}
-{{ failed_checks|json_script:"failed-checks-data" }}
 
 <script
     src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.min.js"

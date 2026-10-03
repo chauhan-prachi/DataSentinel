@@ -1,143 +1,400 @@
 let qualityTrendChart = null;
+
 let checkResultsChart = null;
 
-function getJsonData(id, fallback) {
-  const element = document.getElementById(id);
 
-  if (!element) {
-    return fallback;
-  }
+async function loadDashboardData() {
 
-  try {
-    return JSON.parse(element.textContent);
-  } catch (error) {
-    console.error("Dashboard data parsing failed:", error);
-    return fallback;
-  }
+    try {
+
+        const response = await fetch("/api/dashboard/");
+
+        if (!response.ok) {
+            throw new Error("Unable to load dashboard data.");
+        }
+
+        const data = await response.json();
+
+        renderQualityTrendChart(
+            data.reliability.history
+        );
+
+        renderCheckResultsChart(
+            data.quality.passed_checks,
+            data.quality.failed_checks
+        );
+
+        renderActiveIncidents(
+            data.alerts.active
+        );
+
+    } catch (error) {
+
+        console.error(
+            "Dashboard data loading failed:",
+            error
+        );
+
+    }
+
 }
+
 
 function renderQualityTrendChart(runs) {
-  const canvas = document.getElementById("qualityTrendChart");
 
-  if (!canvas) {
-    console.error("Quality trend canvas not found.");
-    return;
-  }
+    const canvas = document.getElementById(
+        "qualityTrendChart"
+    );
 
-  if (typeof Chart === "undefined") {
-    console.error("Chart.js is not loaded.");
-    return;
-  }
-
-  if (!Array.isArray(runs)) {
-    console.error("Quality trend data is not an array.");
-    return;
-  }
-
-  const validRuns = runs
-    .filter(run => run.quality_score !== null)
-    .reverse();
-
-  if (!validRuns.length) {
-    console.warn("No quality score data available for chart.");
-    return;
-  }
-
-  if (qualityTrendChart) {
-    qualityTrendChart.destroy();
-  }
-
-  qualityTrendChart = new Chart(canvas, {
-    type: "line",
-    data: {
-      labels: validRuns.map(run => run.date),
-      datasets: [
-        {
-          label: "Quality Score",
-          data: validRuns.map(run => run.quality_score),
-          tension: 0.35,
-          fill: false,
-          borderWidth: 3,
-          pointRadius: 4,
-          pointHoverRadius: 6
-        }
-      ]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      interaction: {
-        intersect: false,
-        mode: "index"
-      },
-      scales: {
-        x: {
-          grid: { display: false }
-        },
-        y: {
-          beginAtZero: true,
-          max: 100,
-          ticks: {
-            callback: value => value + "%"
-          }
-        }
-      },
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          callbacks: {
-            label: context => "Quality: " + context.parsed.y + "%"
-          }
-        }
-      }
+    if (!canvas || typeof Chart === "undefined") {
+        return;
     }
-  });
+
+    if (!Array.isArray(runs) || !runs.length) {
+        return;
+    }
+
+    const validRuns = runs.filter(function(run) {
+
+        return run.quality_score !== null;
+
+    });
+
+    if (!validRuns.length) {
+        return;
+    }
+
+    if (qualityTrendChart) {
+        qualityTrendChart.destroy();
+    }
+
+    qualityTrendChart = new Chart(canvas, {
+
+        type: "line",
+
+        data: {
+
+            labels: validRuns.map(function(run) {
+
+                return run.date;
+
+            }),
+
+            datasets: [
+                {
+                    label: "Quality Score",
+
+                    data: validRuns.map(function(run) {
+
+                        return run.quality_score;
+
+                    }),
+
+                    tension: 0.35,
+
+                    fill: false,
+
+                    borderWidth: 3,
+
+                    pointRadius: 4,
+
+                    pointHoverRadius: 6
+                }
+            ]
+        },
+
+        options: {
+
+            responsive: true,
+
+            maintainAspectRatio: false,
+
+            interaction: {
+                intersect: false,
+
+                mode: "index"
+            },
+
+            scales: {
+
+                x: {
+
+                    grid: {
+                        display: false
+                    }
+
+                },
+
+                y: {
+
+                    beginAtZero: true,
+
+                    max: 100,
+
+                    ticks: {
+
+                        callback: function(value) {
+
+                            return value + "%";
+
+                        }
+
+                    }
+
+                }
+
+            },
+
+            plugins: {
+
+                legend: {
+                    display: false
+                },
+
+                tooltip: {
+
+                    callbacks: {
+
+                        label: function(context) {
+
+                            return (
+                                "Quality: " +
+                                context.parsed.y +
+                                "%"
+                            );
+
+                        }
+
+                    }
+
+                }
+
+            }
+
+        }
+
+    });
+
 }
+
 
 function renderCheckResultsChart(passed, failed) {
-  const canvas = document.getElementById("checkResultsChart");
 
-  if (!canvas) {
-    console.error("Check results canvas not found.");
-    return;
-  }
+    const canvas = document.getElementById(
+        "checkResultsChart"
+    );
 
-  if (typeof Chart === "undefined") {
-    console.error("Chart.js is not loaded.");
-    return;
-  }
-
-  if (checkResultsChart) {
-    checkResultsChart.destroy();
-  }
-
-  checkResultsChart = new Chart(canvas, {
-    type: "doughnut",
-    data: {
-      labels: ["Passed", "Failed"],
-      datasets: [
-        {
-          data: [passed, failed],
-          borderWidth: 0
-        }
-      ]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      cutout: "68%",
-      plugins: {
-        legend: { position: "bottom" }
-      }
+    if (!canvas || typeof Chart === "undefined") {
+        return;
     }
-  });
+
+    if (checkResultsChart) {
+        checkResultsChart.destroy();
+    }
+
+    checkResultsChart = new Chart(canvas, {
+
+        type: "doughnut",
+
+        data: {
+
+            labels: [
+                "Passed",
+                "Failed"
+            ],
+
+            datasets: [
+                {
+                    data: [
+                        passed,
+                        failed
+                    ],
+
+                    borderWidth: 0
+                }
+            ]
+
+        },
+
+        options: {
+
+            responsive: true,
+
+            maintainAspectRatio: false,
+
+            cutout: "68%",
+
+            plugins: {
+
+                legend: {
+                    position: "bottom"
+                }
+
+            }
+
+        }
+
+    });
+
 }
 
-document.addEventListener("DOMContentLoaded", () => {
-  const qualityTrendData = getJsonData("quality-trend-data", []);
-  const passedChecks = Number(getJsonData("passed-checks-data", 0));
-  const failedChecks = Number(getJsonData("failed-checks-data", 0));
 
-  renderQualityTrendChart(qualityTrendData);
-  renderCheckResultsChart(passedChecks, failedChecks);
-});
+function renderActiveIncidents(alerts) {
+
+    const container = document.getElementById(
+        "dashboardIncidents"
+    );
+
+    if (!container) {
+        return;
+    }
+
+    container.innerHTML = "";
+
+    if (!Array.isArray(alerts) || !alerts.length) {
+
+        container.innerHTML = `
+            <div class="incident-empty">
+
+                <div class="incident-empty-icon">
+                    ✓
+                </div>
+
+                <strong>
+                    No active incidents
+                </strong>
+
+                <span>
+                    Your data platform has no unresolved alerts.
+                </span>
+
+            </div>
+        `;
+
+        return;
+    }
+
+    alerts.forEach(function(alert) {
+
+        const incident = document.createElement(
+            "div"
+        );
+
+        incident.className = "dashboard-incident";
+
+        const severity =
+            String(alert.severity || "LOW")
+                .toLowerCase();
+
+        const pipelineName =
+            alert.pipeline
+                ? alert.pipeline.name
+                : "Unknown pipeline";
+
+        const runId =
+            alert.pipeline_run
+                ? "#" + alert.pipeline_run.id
+                : "—";
+
+        incident.innerHTML = `
+
+            <div class="incident-severity ${severity}">
+                ${escapeHtml(alert.severity)}
+            </div>
+
+            <div class="incident-content">
+
+                <strong>
+                    ${escapeHtml(alert.title)}
+                </strong>
+
+                <p>
+                    ${escapeHtml(alert.message)}
+                </p>
+
+                <div class="incident-meta">
+
+                    <span>
+                        ${escapeHtml(pipelineName)}
+                    </span>
+
+                    <span>
+                        Run ${runId}
+                    </span>
+
+                    <span>
+                        ${formatIncidentDate(
+                            alert.created_at
+                        )}
+                    </span>
+
+                </div>
+
+            </div>
+
+            <a
+                href="/alerts/"
+                class="incident-link"
+            >
+                Investigate →
+            </a>
+
+        `;
+
+        container.appendChild(incident);
+
+    });
+
+}
+
+
+function escapeHtml(value) {
+
+    const div = document.createElement(
+        "div"
+    );
+
+    div.textContent = value ?? "";
+
+    return div.innerHTML;
+
+}
+
+
+function formatIncidentDate(value) {
+
+    if (!value) {
+        return "—";
+    }
+
+    return new Date(value).toLocaleString();
+
+}
+
+
+document.addEventListener(
+    "DOMContentLoaded",
+    function() {
+
+        loadDashboardData();
+
+        const refreshButton =
+            document.getElementById(
+                "refreshDashboard"
+            );
+
+        if (refreshButton) {
+
+            refreshButton.addEventListener(
+                "click",
+                function() {
+
+                    window.location.reload();
+
+                }
+            );
+
+        }
+
+    }
+);

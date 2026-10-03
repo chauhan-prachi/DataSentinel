@@ -1542,11 +1542,17 @@ def update_issue(
         "issues_page"
     )
 
-
-@require_GET
 @login_required
 def dashboard(request):
     runs = _run_queryset(request)
+
+    alerts_queryset = Alert.objects.filter(
+        pipeline__dataset__owner=request.user,
+        pipeline__dataset__is_active=True,
+    ).select_related(
+        "pipeline",
+        "pipeline_run",
+    )
 
     total_runs = runs.count()
 
@@ -1558,111 +1564,338 @@ def dashboard(request):
         status=PipelineRun.Status.FAILED
     ).count()
 
-    average_quality_score = (
-        runs.filter(
-            quality_score__isnull=False
-        )
-        .aggregate(
-            value=Avg("quality_score")
-        )["value"]
+    running_runs = runs.filter(
+        status=PipelineRun.Status.RUNNING
+    ).count()
+
+    average_quality = (
+        runs
+        .filter(quality_score__isnull=False)
+        .aggregate(value=Avg("quality_score"))["value"]
     )
 
-    if average_quality_score is not None:
-        average_quality_score = round(
-            float(average_quality_score),
-            2,
+    if average_quality is not None:
+        average_quality = round(
+            float(average_quality),
+            1,
         )
 
-    results_queryset = QualityResult.objects.filter(
+    total_checks = QualityResult.objects.filter(
         pipeline_run__pipeline__dataset__owner=request.user,
         pipeline_run__pipeline__dataset__is_active=True,
-    )
-
-    total_checks = results_queryset.count()
-
-    passed_checks = results_queryset.filter(
-        passed=True
     ).count()
 
-    failed_checks = results_queryset.filter(
-        passed=False
+    passed_checks = QualityResult.objects.filter(
+        pipeline_run__pipeline__dataset__owner=request.user,
+        pipeline_run__pipeline__dataset__is_active=True,
+        passed=True,
     ).count()
 
-    open_issues_queryset = QualityIssue.objects.filter(
+    failed_checks = QualityResult.objects.filter(
+        pipeline_run__pipeline__dataset__owner=request.user,
+        pipeline_run__pipeline__dataset__is_active=True,
+        passed=False,
+    ).count()
+
+    open_issues = QualityIssue.objects.filter(
         quality_result__pipeline_run__pipeline__dataset__owner=request.user,
         quality_result__pipeline_run__pipeline__dataset__is_active=True,
         status=QualityIssue.Status.OPEN,
-    )
-
-    open_issues = open_issues_queryset.count()
+    ).count()
 
     issue_severity = {
-        "CRITICAL": open_issues_queryset.filter(
-            severity=QualityIssue.Severity.CRITICAL
+    "critical": QualityIssue.objects.filter(
+        quality_result__pipeline_run__pipeline__dataset__owner=request.user,
+        quality_result__pipeline_run__pipeline__dataset__is_active=True,
+        severity=QualityIssue.Severity.CRITICAL,
+        status=QualityIssue.Status.OPEN,
+    ).count(),
+
+    "high": QualityIssue.objects.filter(
+        quality_result__pipeline_run__pipeline__dataset__owner=request.user,
+        quality_result__pipeline_run__pipeline__dataset__is_active=True,
+        severity=QualityIssue.Severity.HIGH,
+        status=QualityIssue.Status.OPEN,
+    ).count(),
+
+    "medium": QualityIssue.objects.filter(
+        quality_result__pipeline_run__pipeline__dataset__owner=request.user,
+        quality_result__pipeline_run__pipeline__dataset__is_active=True,
+        severity=QualityIssue.Severity.MEDIUM,
+        status=QualityIssue.Status.OPEN,
+    ).count(),
+
+    "low": QualityIssue.objects.filter(
+        quality_result__pipeline_run__pipeline__dataset__owner=request.user,
+        quality_result__pipeline_run__pipeline__dataset__is_active=True,
+        severity=QualityIssue.Severity.LOW,
+        status=QualityIssue.Status.OPEN,
+    ).count(),
+}
+    latest_run = runs.first()
+
+    latest_run_data = None
+
+    if latest_run:
+        reliability_metadata = (
+            latest_run.metadata.get(
+                "reliability",
+                {},
+            )
+            if isinstance(
+                latest_run.metadata,
+                dict,
+            )
+            else {}
+        )
+
+        latest_run_data = {
+            "id": latest_run.id,
+            "pipeline": latest_run.pipeline.name,
+            "dataset": latest_run.pipeline.dataset.name,
+            "status": latest_run.status,
+            "rows_processed": latest_run.rows_processed,
+            "quality_score": (
+                float(latest_run.quality_score)
+                if latest_run.quality_score is not None
+                else None
+            ),
+            "reliability_score": (
+                float(latest_run.reliability_score)
+                if latest_run.reliability_score is not None
+                else None
+            ),
+            "reliability_grade": latest_run.reliability_grade,
+            "reliability_status": latest_run.reliability_status,
+            "schema_changed": latest_run.schema_changed,
+            "anomalies_detected": latest_run.anomalies_detected,
+            "reliability": reliability_metadata,
+            "started_at": latest_run.started_at,
+            "completed_at": latest_run.completed_at,
+        }
+
+    history_runs = list(
+        runs
+        .filter(
+            reliability_score__isnull=False,
+        )
+        .order_by("-started_at")[:20]
+    )
+
+    reliability_history = []
+
+    for run in reversed(history_runs):
+        reliability_history.append(
+            {
+                "id": run.id,
+                "pipeline": run.pipeline.name,
+                "dataset": run.pipeline.dataset.name,
+                "score": float(run.reliability_score),
+                "quality_score": (
+                    float(run.quality_score)
+                    if run.quality_score is not None
+                    else None
+                ),
+                "grade": run.reliability_grade,
+                "status": run.reliability_status,
+                "date": run.started_at.strftime("%b %d"),
+            }
+        )
+
+    pipeline_health = []
+
+    pipelines = _pipeline_queryset(request)
+
+    for pipeline in pipelines[:10]:
+        latest_pipeline_run = (
+            pipeline.runs
+            .filter(
+                status__in=[
+                    PipelineRun.Status.SUCCESS,
+                    PipelineRun.Status.FAILED,
+                    PipelineRun.Status.RUNNING,
+                ]
+            )
+            .order_by("-started_at")
+            .first()
+        )
+
+        if latest_pipeline_run is None:
+            health_status = "NO_RUN"
+
+        elif (
+            latest_pipeline_run.status
+            == PipelineRun.Status.RUNNING
+        ):
+            health_status = "RUNNING"
+
+        elif (
+            latest_pipeline_run.status
+            == PipelineRun.Status.FAILED
+        ):
+            health_status = "FAILED"
+
+        elif (
+            latest_pipeline_run.reliability_score is not None
+            and float(
+                latest_pipeline_run.reliability_score
+            ) < 50
+        ):
+            health_status = "CRITICAL"
+
+        elif (
+            latest_pipeline_run.reliability_score is not None
+            and float(
+                latest_pipeline_run.reliability_score
+            ) < 70
+        ):
+            health_status = "WARNING"
+
+        else:
+            health_status = "HEALTHY"
+
+        pipeline_health.append(
+            {
+                "id": pipeline.id,
+                "name": pipeline.name,
+                "dataset": pipeline.dataset.name,
+                "health_status": health_status,
+                "latest_run": (
+                    {
+                        "id": latest_pipeline_run.id,
+                        "status": latest_pipeline_run.status,
+                        "quality_score": (
+                            float(
+                                latest_pipeline_run.quality_score
+                            )
+                            if latest_pipeline_run.quality_score
+                            is not None
+                            else None
+                        ),
+                        "reliability_score": (
+                            float(
+                                latest_pipeline_run.reliability_score
+                            )
+                            if latest_pipeline_run.reliability_score
+                            is not None
+                            else None
+                        ),
+                        "reliability_grade": (
+                            latest_pipeline_run.reliability_grade
+                        ),
+                        "reliability_status": (
+                            latest_pipeline_run.reliability_status
+                        ),
+                        "started_at": (
+                            latest_pipeline_run.started_at
+                        ),
+                    }
+                    if latest_pipeline_run
+                    else None
+                ),
+            }
+        )
+
+    active_alerts = alerts_queryset.filter(
+        status__in=[
+            Alert.Status.OPEN,
+            Alert.Status.ACKNOWLEDGED,
+        ]
+    )
+
+    alert_summary = {
+        "total": alerts_queryset.count(),
+        "open": alerts_queryset.filter(
+            status=Alert.Status.OPEN
         ).count(),
-        "HIGH": open_issues_queryset.filter(
-            severity=QualityIssue.Severity.HIGH
+        "acknowledged": alerts_queryset.filter(
+            status=Alert.Status.ACKNOWLEDGED
         ).count(),
-        "MEDIUM": open_issues_queryset.filter(
-            severity=QualityIssue.Severity.MEDIUM
+        "critical": alerts_queryset.filter(
+            severity=Alert.Severity.CRITICAL
         ).count(),
-        "LOW": open_issues_queryset.filter(
-            severity=QualityIssue.Severity.LOW
+        "high": alerts_queryset.filter(
+            severity=Alert.Severity.HIGH
+        ).count(),
+        "medium": alerts_queryset.filter(
+            severity=Alert.Severity.MEDIUM
+        ).count(),
+        "low": alerts_queryset.filter(
+            severity=Alert.Severity.LOW
         ).count(),
     }
 
-    latest_run = None
+    active_alert_data = []
 
-    if runs.exists():
-        run = runs.first()
+    for alert in active_alerts[:10]:
+        active_alert_data.append(
+            {
+                "id": alert.id,
+                "type": alert.alert_type,
+                "severity": alert.severity,
+                "status": alert.status,
+                "title": alert.title,
+                "message": alert.message,
+                "pipeline": alert.pipeline.name,
+                "pipeline_id": alert.pipeline.id,
+                "run_id": (
+                    alert.pipeline_run.id
+                    if alert.pipeline_run
+                    else None
+                ),
+                "created_at": alert.created_at,
+            }
+        )
 
-        latest_run = {
-            "id": run.id,
-            "pipeline": run.pipeline.name,
-            "dataset": run.pipeline.dataset.name,
-            "status": run.status,
-            "rows_processed": (
-                run.rows_processed
-            ),
-            "quality_score": (
-                float(run.quality_score)
-                if run.quality_score is not None
-                else None
-            ),
-            "started_at": run.started_at,
-            "completed_at": run.completed_at,
-        }
+    recent_runs = []
 
-    recent_runs = [
-        {
-            "id": run.id,
-            "pipeline": run.pipeline.name,
-            "dataset": run.pipeline.dataset.name,
-            "status": run.status,
-            "rows_processed": (
-                run.rows_processed
-            ),
-            "quality_score": (
-                float(run.quality_score)
-                if run.quality_score is not None
-                else None
-            ),
-            "started_at": run.started_at,
-            "completed_at": run.completed_at,
-        }
-        for run in runs[:10]
-    ]
+    for run in runs[:10]:
+        recent_runs.append(
+            {
+                "id": run.id,
+                "pipeline": run.pipeline.name,
+                "dataset": run.pipeline.dataset.name,
+                "status": run.status,
+                "rows_processed": run.rows_processed,
+                "quality_score": (
+                    float(run.quality_score)
+                    if run.quality_score is not None
+                    else None
+                ),
+                "reliability_score": (
+                    float(run.reliability_score)
+                    if run.reliability_score is not None
+                    else None
+                ),
+                "reliability_grade": run.reliability_grade,
+                "reliability_status": run.reliability_status,
+                "schema_changed": run.schema_changed,
+                "anomalies_detected": run.anomalies_detected,
+                "started_at": run.started_at,
+                "completed_at": run.completed_at,
+            }
+        )
+
+    success_rate = 0
+
+    if total_runs:
+        success_rate = round(
+            (
+                successful_runs
+                / total_runs
+            ) * 100,
+            1,
+        )
 
     return JsonResponse(
         {
-            "service": "DataSentinel",
             "overview": {
                 "total_runs": total_runs,
                 "successful_runs": successful_runs,
                 "failed_runs": failed_runs,
-                "average_quality_score": (
-                    average_quality_score
-                ),
+                "running_runs": running_runs,
+                "success_rate": success_rate,
+                "average_quality_score": average_quality,
             },
             "quality": {
                 "total_checks": total_checks,
@@ -1671,11 +1904,63 @@ def dashboard(request):
                 "open_issues": open_issues,
                 "issue_severity": issue_severity,
             },
-            "latest_run": latest_run,
+            "reliability": {
+                "latest": (
+                    {
+                        "score": latest_run_data[
+                            "reliability_score"
+                        ],
+                        "grade": latest_run_data[
+                            "reliability_grade"
+                        ],
+                        "status": latest_run_data[
+                            "reliability_status"
+                        ],
+                        "breakdown": (
+                            latest_run_data[
+                                "reliability"
+                            ].get(
+                                "breakdown",
+                                {},
+                            )
+                            if isinstance(
+                                latest_run_data[
+                                    "reliability"
+                                ],
+                                dict,
+                            )
+                            else {}
+                        ),
+                        "reasons": (
+                            latest_run_data[
+                                "reliability"
+                            ].get(
+                                "reasons",
+                                [],
+                            )
+                            if isinstance(
+                                latest_run_data[
+                                    "reliability"
+                                ],
+                                dict,
+                            )
+                            else []
+                        ),
+                    }
+                    if latest_run_data
+                    else None
+                ),
+                "history": reliability_history,
+            },
+            "alerts": {
+                "summary": alert_summary,
+                "active": active_alert_data,
+            },
+            "pipeline_health": pipeline_health,
+            "latest_run": latest_run_data,
             "recent_runs": recent_runs,
         }
     )
-
 
 @require_GET
 @login_required
