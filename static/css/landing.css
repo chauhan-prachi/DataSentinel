@@ -13,7 +13,7 @@
     --landing-danger: #dc2626;
     --landing-sidebar: #111827;
     --landing-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
-    --landing-shadow-lg: 0 20px 50px rgba(15, 23, 42, 0.10);
+    --landing-shadow-lg: 0 20px 50px rgba(15, 23, 42, 0.1);
 }
 
 * {
@@ -175,7 +175,7 @@ a {
     height: 7px;
     border-radius: 50%;
     background: var(--landing-primary);
-    box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.10);
+    box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1);
 }
 
 .hero-content h2 {
@@ -325,7 +325,7 @@ a {
     height: 7px;
     border-radius: 50%;
     background: var(--landing-success);
-    box-shadow: 0 0 0 4px rgba(22, 163, 74, 0.10);
+    box-shadow: 0 0 0 4px rgba(22, 163, 74, 0.1);
 }
 
 .reliability-score {

@@ -7,13 +7,19 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
+
 <title>DataSentinel | Data Reliability Platform</title>
+
+<meta
+    name="description"
+    content="DataSentinel monitors data quality, pipeline reliability, schema changes, and anomalies in one workspace."
+>
 
 <link
     rel="stylesheet"
     href="{% static 'css/landing.css' %}"
 >
-```
+
 
 </head>
 
@@ -21,19 +27,24 @@
 
 <header class="landing-navbar">
 
-```
-<div class="brand">
+<a href="{% url 'landing_page' %}" class="brand">
     <div class="brand-icon">◈</div>
 
-    <div>
+    <div class="brand-copy">
         <h1>DataSentinel</h1>
         <span>DATA RELIABILITY</span>
     </div>
-</div>
+</a>
 
-<nav class="landing-nav">
-    <a href="#how-it-works">How it Works</a>
-    <a href="#features">Features</a>
+<nav class="landing-nav" aria-label="Main navigation">
+
+    <a href="#how-it-works">
+        How it Works
+    </a>
+
+    <a href="#features">
+        Features
+    </a>
 
     <a
         href="{% url 'login' %}"
@@ -48,20 +59,22 @@
     >
         Get Started
     </a>
+
 </nav>
-```
+
 
 </header>
 
 <main class="landing-container">
 
-```
+
 <section class="hero-section">
 
     <div class="hero-content">
 
         <div class="hero-badge">
-            ● DATA RELIABILITY PLATFORM
+            <span class="badge-dot"></span>
+            DATA RELIABILITY PLATFORM
         </div>
 
         <h2>
@@ -69,10 +82,10 @@
             <span>stops being reliable.</span>
         </h2>
 
-        <p>
-            DataSentinel continuously monitors your datasets,
-            runs automated quality checks, detects issues,
-            and helps you understand what went wrong.
+        <p class="hero-description">
+            DataSentinel monitors your datasets, evaluates data quality,
+            detects schema changes and anomalies, and helps you investigate
+            reliability issues before they affect downstream systems.
         </p>
 
         <div class="hero-actions">
@@ -81,15 +94,36 @@
                 href="{% url 'signup' %}"
                 class="primary-button"
             >
-                Start Monitoring →
+                Start Monitoring
+                <span>→</span>
             </a>
 
             <a
                 href="#dashboard-preview"
                 class="secondary-button"
             >
-                Explore Dashboard
+                Explore Platform
+                <span>↓</span>
             </a>
+
+        </div>
+
+        <div class="hero-trust">
+
+            <div class="trust-item">
+                <span class="trust-icon">✓</span>
+                Automated checks
+            </div>
+
+            <div class="trust-item">
+                <span class="trust-icon">✓</span>
+                Schema monitoring
+            </div>
+
+            <div class="trust-item">
+                <span class="trust-icon">✓</span>
+                Pipeline insights
+            </div>
 
         </div>
 
@@ -99,37 +133,85 @@
     <div class="hero-status-card">
 
         <div class="status-card-header">
-            <span>DATA RELIABILITY STATUS</span>
+
+            <div>
+                <span class="status-label">
+                    PLATFORM OVERVIEW
+                </span>
+
+                <span class="status-subtitle">
+                    Sample environment
+                </span>
+            </div>
 
             <div class="live-indicator">
                 <span></span>
-                LIVE
+                DEMO
             </div>
+
         </div>
+
 
         <div class="reliability-score">
 
             <div class="score-circle">
-                <strong>
-                    {{ demo_metrics.quality_score }}%
-                </strong>
 
-                <span>RELIABLE</span>
+                <div class="score-inner">
+                    <strong>
+                        {{ demo_metrics.quality_score }}%
+                    </strong>
+
+                    <span>
+                        RELIABILITY
+                    </span>
+                </div>
+
             </div>
+
 
             <div class="score-info">
 
-                <h3>System Health</h3>
+                <span class="score-label">
+                    CURRENT STATUS
+                </span>
+
+                <h3>
+                    System Healthy
+                </h3>
 
                 <p>
-                    Your data infrastructure is operating normally.
+                    Data quality and monitored pipelines
+                    are operating within expected thresholds.
                 </p>
 
                 <div class="health-status">
                     <span class="status-dot"></span>
-                    Healthy
+                    All systems operational
                 </div>
 
+            </div>
+
+        </div>
+
+
+        <div class="status-divider"></div>
+
+
+        <div class="status-footer">
+
+            <div>
+                <span>Quality</span>
+                <strong>{{ demo_metrics.quality_score }}%</strong>
+            </div>
+
+            <div>
+                <span>Pipelines</span>
+                <strong>{{ demo_metrics.pipelines }}</strong>
+            </div>
+
+            <div>
+                <span>Issues</span>
+                <strong>{{ demo_metrics.open_issues }}</strong>
             </div>
 
         </div>
@@ -137,7 +219,6 @@
     </div>
 
 </section>
-
 
 
 <section
@@ -148,17 +229,24 @@
     <div class="section-heading">
 
         <div>
+
             <span class="section-label">
-                LIVE OVERVIEW
+                PLATFORM OVERVIEW
             </span>
 
             <h2>
                 Your data reliability at a glance
             </h2>
+
+            <p>
+                A single workspace for monitoring datasets,
+                pipelines, quality, and reliability.
+            </p>
+
         </div>
 
         <span class="demo-label">
-            DEMO DATA
+            SAMPLE DATA
         </span>
 
     </div>
@@ -172,16 +260,18 @@
                 ▦
             </div>
 
-            <div>
+            <div class="metric-content">
 
-                <span>Datasets</span>
+                <span>
+                    Datasets
+                </span>
 
                 <strong>
                     {{ demo_metrics.datasets }}
                 </strong>
 
                 <small>
-                    Connected sources
+                    Connected data sources
                 </small>
 
             </div>
@@ -195,16 +285,18 @@
                 ◇
             </div>
 
-            <div>
+            <div class="metric-content">
 
-                <span>Pipelines</span>
+                <span>
+                    Pipelines
+                </span>
 
                 <strong>
                     {{ demo_metrics.pipelines }}
                 </strong>
 
                 <small>
-                    Active monitors
+                    Monitored workflows
                 </small>
 
             </div>
@@ -218,16 +310,18 @@
                 ↻
             </div>
 
-            <div>
+            <div class="metric-content">
 
-                <span>Pipeline Runs</span>
+                <span>
+                    Pipeline Runs
+                </span>
 
                 <strong>
                     {{ demo_metrics.pipeline_runs }}
                 </strong>
 
                 <small>
-                    Total executions
+                    Recorded executions
                 </small>
 
             </div>
@@ -241,16 +335,18 @@
                 !
             </div>
 
-            <div>
+            <div class="metric-content">
 
-                <span>Open Issues</span>
+                <span>
+                    Open Issues
+                </span>
 
                 <strong>
                     {{ demo_metrics.open_issues }}
                 </strong>
 
                 <small>
-                    Require attention
+                    Require investigation
                 </small>
 
             </div>
@@ -260,7 +356,6 @@
     </div>
 
 </section>
-
 
 
 <section class="preview-grid">
@@ -281,26 +376,52 @@
 
             </div>
 
-            <span class="trend-value">
+            <div class="trend-indicator">
+                <span>↗</span>
                 +12.4%
+            </div>
+
+        </div>
+
+
+        <div class="chart-summary">
+
+            <strong>
+                {{ demo_metrics.quality_score }}%
+            </strong>
+
+            <span>
+                Current quality score
             </span>
 
         </div>
 
 
-        <div class="chart-placeholder">
+        <div
+            class="chart-placeholder"
+            aria-label="Sample weekly quality trend"
+        >
+
+            <div class="chart-grid-lines">
+                <span></span>
+                <span></span>
+                <span></span>
+                <span></span>
+            </div>
 
             <div class="chart-line">
 
-                <span style="height: 45%;"></span>
-                <span style="height: 58%;"></span>
-                <span style="height: 52%;"></span>
-                <span style="height: 70%;"></span>
-                <span style="height: 82%;"></span>
-                <span style="height: 76%;"></span>
-                <span style="height: 92%;"></span>
+                {% for item in quality_trend_data %}
+
+                    <span
+                        style="height: {{ item.score }}%;"
+                        title="{{ item.date }}: {{ item.score }}%"
+                    ></span>
+
+                {% endfor %}
 
             </div>
+
 
             <div class="chart-labels">
 
@@ -319,7 +440,6 @@
     </div>
 
 
-
     <div class="preview-card health-card">
 
         <div class="card-header">
@@ -327,7 +447,7 @@
             <div>
 
                 <span class="card-label">
-                    PIPELINE STATUS
+                    PIPELINE OBSERVABILITY
                 </span>
 
                 <h3>
@@ -335,6 +455,10 @@
                 </h3>
 
             </div>
+
+            <span class="health-count">
+                {{ demo_metrics.pipelines }} monitored
+            </span>
 
         </div>
 
@@ -348,8 +472,8 @@
                     <div class="pipeline-name">
 
                         <span
-                            class="pipeline-status
-                            {{ pipeline.status|lower }}"
+                            class="pipeline-status {{ pipeline.status|lower }}"
+                            aria-hidden="true"
                         ></span>
 
                         <div>
@@ -369,8 +493,7 @@
 
 
                     <span
-                        class="pipeline-badge
-                        {{ pipeline.status|lower }}"
+                        class="pipeline-badge {{ pipeline.status|lower }}"
                     >
                         {{ pipeline.status }}
                     </span>
@@ -384,7 +507,6 @@
     </div>
 
 </section>
-
 
 
 <section
@@ -403,7 +525,8 @@
         </h2>
 
         <p>
-            Monitor your data quality in four simple steps.
+            DataSentinel turns your data monitoring workflow
+            into a repeatable reliability process.
         </p>
 
     </div>
@@ -413,12 +536,14 @@
 
         <div class="step-card">
 
-            <div class="step-number">
-                01
-            </div>
+            <div class="step-top">
+                <span class="step-number">
+                    01
+                </span>
 
-            <div class="step-icon">
-                ↑
+                <span class="step-icon">
+                    ↑
+                </span>
             </div>
 
             <h3>
@@ -426,20 +551,27 @@
             </h3>
 
             <p>
-                Upload and connect your datasets to DataSentinel.
+                Upload or connect datasets from supported
+                data sources and formats.
             </p>
+
+            <span class="step-arrow">
+                →
+            </span>
 
         </div>
 
 
         <div class="step-card">
 
-            <div class="step-number">
-                02
-            </div>
+            <div class="step-top">
+                <span class="step-number">
+                    02
+                </span>
 
-            <div class="step-icon">
-                ◉
+                <span class="step-icon">
+                    ◉
+                </span>
             </div>
 
             <h3>
@@ -447,20 +579,27 @@
             </h3>
 
             <p>
-                Automatically understand your schema and data patterns.
+                Inspect schemas, data types, nulls,
+                duplicates, and important data patterns.
             </p>
+
+            <span class="step-arrow">
+                →
+            </span>
 
         </div>
 
 
         <div class="step-card">
 
-            <div class="step-number">
-                03
-            </div>
+            <div class="step-top">
+                <span class="step-number">
+                    03
+                </span>
 
-            <div class="step-icon">
-                ✓
+                <span class="step-icon">
+                    ✓
+                </span>
             </div>
 
             <h3>
@@ -468,20 +607,27 @@
             </h3>
 
             <p>
-                Run automated quality checks continuously.
+                Run automated quality checks and monitor
+                pipeline executions over time.
             </p>
+
+            <span class="step-arrow">
+                →
+            </span>
 
         </div>
 
 
         <div class="step-card">
 
-            <div class="step-number">
-                04
-            </div>
+            <div class="step-top">
+                <span class="step-number">
+                    04
+                </span>
 
-            <div class="step-icon">
-                !
+                <span class="step-icon">
+                    !
+                </span>
             </div>
 
             <h3>
@@ -489,7 +635,8 @@
             </h3>
 
             <p>
-                Detect and investigate issues before they impact users.
+                Detect anomalies, investigate reliability
+                issues, and track their resolution.
             </p>
 
         </div>
@@ -497,7 +644,6 @@
     </div>
 
 </section>
-
 
 
 <section
@@ -508,17 +654,26 @@
     <div class="features-content">
 
         <span class="section-label">
-            BUILT FOR RELIABLE DATA
+            DATA RELIABILITY ENGINE
         </span>
 
         <h2>
-            Everything you need to monitor your data
+            Built to understand what is happening inside your data.
         </h2>
 
         <p>
-            DataSentinel brings dataset monitoring, quality checks,
-            pipeline reliability, and issue tracking into one workspace.
+            DataSentinel combines data profiling, quality validation,
+            schema monitoring, anomaly detection, pipeline execution,
+            and issue tracking in one reliability workflow.
         </p>
+
+        <a
+            href="{% url 'signup' %}"
+            class="text-link"
+        >
+            Start monitoring
+            <span>→</span>
+        </a>
 
     </div>
 
@@ -527,7 +682,9 @@
 
         <div class="feature-item">
 
-            <span>✓</span>
+            <div class="feature-check">
+                ✓
+            </div>
 
             <div>
 
@@ -537,7 +694,8 @@
 
                 <p>
                     Detect missing values, duplicates,
-                    invalid formats, and data anomalies.
+                    invalid formats, numeric problems,
+                    and range violations.
                 </p>
 
             </div>
@@ -547,16 +705,19 @@
 
         <div class="feature-item">
 
-            <span>✓</span>
+            <div class="feature-check">
+                ✓
+            </div>
 
             <div>
 
                 <h3>
-                    Pipeline Monitoring
+                    Schema Drift Detection
                 </h3>
 
                 <p>
-                    Track pipeline runs and identify failures quickly.
+                    Compare dataset schemas across pipeline
+                    runs and identify structural changes.
                 </p>
 
             </div>
@@ -566,17 +727,87 @@
 
         <div class="feature-item">
 
-            <span>✓</span>
+            <div class="feature-check">
+                ✓
+            </div>
 
             <div>
 
                 <h3>
-                    Issue Tracking
+                    Statistical Anomaly Detection
                 </h3>
 
                 <p>
-                    Investigate data quality problems
-                    and track their resolution.
+                    Identify unusual changes in row counts,
+                    null rates, and numeric distributions.
+                </p>
+
+            </div>
+
+        </div>
+
+
+        <div class="feature-item">
+
+            <div class="feature-check">
+                ✓
+            </div>
+
+            <div>
+
+                <h3>
+                    Reliability Scoring
+                </h3>
+
+                <p>
+                    Combine quality, schema stability,
+                    anomaly health, and pipeline status
+                    into a transparent reliability score.
+                </p>
+
+            </div>
+
+        </div>
+
+
+        <div class="feature-item">
+
+            <div class="feature-check">
+                ✓
+            </div>
+
+            <div>
+
+                <h3>
+                    Automated Root-Cause Analysis
+                </h3>
+
+                <p>
+                    Connect quality failures, schema changes,
+                    anomalies, and pipeline failures into
+                    structured diagnostic findings.
+                </p>
+
+            </div>
+
+        </div>
+
+
+        <div class="feature-item">
+
+            <div class="feature-check">
+                ✓
+            </div>
+
+            <div>
+
+                <h3>
+                    Alerts & Issue Tracking
+                </h3>
+
+                <p>
+                    Surface important reliability events
+                    and track issues from detection to resolution.
                 </p>
 
             </div>
@@ -587,6 +818,70 @@
 
 </section>
 
+
+<section class="architecture-section">
+
+    <div class="section-heading centered">
+
+        <span class="section-label">
+            RELIABILITY WORKFLOW
+        </span>
+
+        <h2>
+            One workflow. Multiple reliability signals.
+        </h2>
+
+        <p>
+            DataSentinel brings the important signals together
+            before they become production problems.
+        </p>
+
+    </div>
+
+
+    <div class="architecture-flow">
+
+        <div class="architecture-node">
+            <span>01</span>
+            <strong>Data</strong>
+            <small>Dataset ingestion</small>
+        </div>
+
+        <div class="flow-line"></div>
+
+        <div class="architecture-node">
+            <span>02</span>
+            <strong>Quality</strong>
+            <small>Rule validation</small>
+        </div>
+
+        <div class="flow-line"></div>
+
+        <div class="architecture-node">
+            <span>03</span>
+            <strong>Schema</strong>
+            <small>Drift detection</small>
+        </div>
+
+        <div class="flow-line"></div>
+
+        <div class="architecture-node">
+            <span>04</span>
+            <strong>Anomaly</strong>
+            <small>Statistical signals</small>
+        </div>
+
+        <div class="flow-line"></div>
+
+        <div class="architecture-node">
+            <span>05</span>
+            <strong>Reliability</strong>
+            <small>Score & investigate</small>
+        </div>
+
+    </div>
+
+</section>
 
 
 <section class="cta-section">
@@ -598,12 +893,12 @@
         </span>
 
         <h2>
-            Start monitoring your data today.
+            Make data reliability measurable.
         </h2>
 
         <p>
-            Connect your first dataset and discover what is happening
-            inside your data pipelines.
+            Connect your first dataset and start understanding
+            the quality and reliability of your data pipelines.
         </p>
 
     </div>
@@ -613,41 +908,81 @@
         href="{% url 'signup' %}"
         class="primary-button"
     >
-        Create Free Account →
+        Create Free Account
+        <span>→</span>
     </a>
 
 </section>
-```
+
 
 </main>
 
 <footer class="landing-footer">
 
-```
-<div class="brand">
 
-    <div class="brand-icon">
-        ◈
-    </div>
+<div class="footer-brand">
 
-    <div>
+    <a
+        href="{% url 'landing_page' %}"
+        class="brand"
+    >
 
-        <h3>
-            DataSentinel
-        </h3>
+        <div class="brand-icon">
+            ◈
+        </div>
 
-        <span>
-            DATA RELIABILITY
-        </span>
+        <div class="brand-copy">
 
-    </div>
+            <h3>
+                DataSentinel
+            </h3>
+
+            <span>
+                DATA RELIABILITY
+            </span>
+
+        </div>
+
+    </a>
+
+    <p>
+        Monitor. Detect. Resolve.
+    </p>
 
 </div>
 
 
-<p>
-    Monitor. Detect. Resolve.
-</p>
+<div class="footer-links">
+
+    <a href="#how-it-works">
+        How it Works
+    </a>
+
+    <a href="#features">
+        Features
+    </a>
+
+    <a href="{% url 'login' %}">
+        Sign In
+    </a>
+
+    <a href="{% url 'signup' %}">
+        Get Started
+    </a>
+
+</div>
+
+<div class="footer-bottom">
+    <span>
+        DataSentinel
+    </span>
+
+    <span>
+        Data reliability monitoring platform
+    </span>
+</div>
+
+
 </footer>
 
 </body>
